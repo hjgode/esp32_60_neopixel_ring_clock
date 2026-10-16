@@ -50,15 +50,18 @@
 
 MQTT
 
-  // ✅ Correct - use std::string directly
-  std::string topic = "mytopic";
-  std::string payload = "Hello World";
-  mqttClient.publish(topic, payload, 0, false);
-
-  // ✅ Convert from Arduino String
-  String arduinoTopic = "mytopic";
-  String arduinoPayload = "Hello World";
-  mqttClient.publish(arduinoTopic.c_str(), arduinoPayload.c_str(), 0, false);
+{
+  "offset": 0,
+  "brightness": 20,
+  "handleHourColor": 16711680,
+  "handleMinuteColor": 65280,
+  "handleSecondColor": 31,
+  "tickColor": 3289650,
+  "dimOn": true,
+  "valueDim": 10,
+  "hourStartDim": 20,
+  "hourStopDim": 6
+}
 
 */
 
@@ -91,6 +94,7 @@ const char* WIFI_PASSWORD = "1234567890123";
 WiFiClient net;
 MQTTClient client;
 
+#include <ArduinoJson.h>
 // Time Globals
 time_t now;  // this are the seconds since Epoch (1970) - UTC
 tm tm;       // the structure tm holds time information in a more convenient way *
@@ -194,6 +198,12 @@ void setPixel(int i, uint32_t color) {
   pixels.setPixelColor(index(i), color);
 }
 
+void setPixelBlock(int i, uint32_t color) {
+  pixels.setPixelColor(index(i), color);
+  pixels.setPixelColor(index(i-1), color);
+  pixels.setPixelColor(index(i+1), color);
+}
+
 uint32_t getPixel(int i) {
   return pixels.getPixelColor(index(i));
 }
@@ -207,7 +217,8 @@ void setTicks(int m) {
 
 void setHours(int h) {
   uint32_t hourColor = 0x00c83200; //pixels.Color(200, 50, 0); //0x00c83200
-  setPixel(h * 5, handleHourColor);  // h: 0..11 = 12 Hours
+  setPixel(h * 5, handleHourColor);  // h: 0..11 = 12 Hours, 5=NumPixels/12
+  setPixelBlock(h*5, handleHourColor);
 }
 
 void setMinutes(int m) {
@@ -218,6 +229,7 @@ void setMinutes(int m) {
   }
 */
   setPixel(m, handleMinuteColor);
+  setPixelBlock(m, handleMinuteColor);
 }
 
 void setSeconds(int s) {
@@ -322,6 +334,29 @@ void updateDisplay() {
   }
 }
 
+bool dumpFlag=true;
+
+void dumpValues(){
+  JsonDocument doc;
+  doc["offset"]=OFFSET;
+  doc["brightness"]=PIXEL_BRIGHTNESS;
+  doc["handleHourColor"]=handleHourColor;
+  doc["handleMinuteColor"]=handleMinuteColor;
+  doc["handleSecondColor"]=handleSecondColor;
+  doc["tickColor"]=tickColor;
+  doc["dimOn"]=dimOn;
+  doc["valueDim"]=valueDim;
+  doc["hourStartDim"]=hourStartDim;
+  doc["hourStopDim"]=hourStopDim;
+
+  String payload;
+  serializeJsonPretty(doc, payload);
+  char mybuf[payload.length()+1];
+  payload.toCharArray(mybuf, sizeof(mybuf));
+
+  client.publish("/esp32_clock/settings", mybuf, sizeof(mybuf));
+  dumpFlag=false;
+}
 
 void messageReceived(String &topic, String &payload) {
   Serial.println("incoming: " + topic + " - " + payload);
@@ -386,6 +421,9 @@ void messageReceived(String &topic, String &payload) {
     hourStopDim= sPayload.toInt();
     Serial.printf("new hourStopDim = %i \n", hourStopDim);
   }
+  else if (topic.endsWith("dumpValues")){
+    dumpFlag=true;
+  }
 
 }
 
@@ -425,6 +463,10 @@ void loop() {
   
   updateDisplay();
   delay(100);
+
+  if(dumpFlag){
+    dumpValues();
+  }
 /*  if (millis() - lastMillis >= 2*60*1000UL) 
   {
     lastMillis = millis();  //get ready for the next iteration
