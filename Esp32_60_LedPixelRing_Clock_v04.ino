@@ -167,7 +167,7 @@ uint8_t PIXEL_BRIGHTNESS=20;
 #define DINPIN 2
 #define NPIXELS 60
 //#define OFFSET 29
-uint8_t OFFSET = 1;
+uint8_t OFFSET = 0;
 
 uint32_t handleMinuteColor = 0x0000ff00; //0x00646400; //(uint32_t)strtoul("00646400", NULL, 16); //100, 100, 0;
 //   printf("value = %u 0x%08x\n", handleMinuteColor, handleMinuteColor);
