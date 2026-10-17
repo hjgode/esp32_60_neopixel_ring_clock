@@ -1,0 +1,6 @@
+mosquitto_sub -h 192.168.0.40 -t "/esp32_clock/#"
+
+mosquitto_pub -h 192.168.0.40 -t "/esp32_clock/dumpValues" -m 1
+
+mosquitto_pub -h 192.168.0.40 -t "/esp32_clock/handleSecondColor" -m 00000040
+

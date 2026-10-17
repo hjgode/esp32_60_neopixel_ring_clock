@@ -27,11 +27,30 @@
 
   possible mqtt values
   brightness  0-255
-  ofsset      0-59
-  handleMinuteColor
+  offset      0-59
+  handleMinuteColor as 32Bit Hex number, ie 001f3a40
   handleHourColor
   handleSecondColor
   tickColor
+  dimOn
+  valueDim
+  hourStartDim
+  hourStopDim
+  dumpValues
+
+  doc["offset"]=OFFSET;
+  doc["brightness"]=PIXEL_BRIGHTNESS;
+  doc["handleHourColor"]=handleHourColor;
+  doc["handleMinuteColor"]=handleMinuteColor;
+  doc["handleSecondColor"]=handleSecondColor;
+  doc["tickColor"]=tickColor;
+  doc["dimOn"]=dimOn;
+  doc["valueDim"]=valueDim;
+  doc["hourStartDim"]=hourStartDim;
+  doc["hourStopDim"]=hourStopDim;
+
+  out only:
+  settings
 
   Color is a uint_32 adjusted with brightness, 32bit packed RGB value
     r,g,b 0-255
@@ -47,21 +66,6 @@
         r = (r * brightness) >> 8;
         g = (g * brightness) >> 8;
         b = (b * brightness) >> 8;
-
-MQTT
-
-{
-  "offset": 0,
-  "brightness": 20,
-  "handleHourColor": 16711680,
-  "handleMinuteColor": 65280,
-  "handleSecondColor": 31,
-  "tickColor": 3289650,
-  "dimOn": true,
-  "valueDim": 10,
-  "hourStartDim": 20,
-  "hourStopDim": 6
-}
 
 */
 
@@ -87,6 +91,7 @@ const char* WIFI_PASSWORD = "1234567890123";
 //#define MY_TZ "CET-1CEST,M3.5.0/02,M10.5.0/03"
 #define MY_TIMEZONE "CET-1CEST,M3.5.0,M10.5.0/3"  //germany
 
+#include <Preferences.h>
 #include <time.h>
 #include <WiFi.h>
 #include <MQTT.h>
@@ -95,6 +100,9 @@ WiFiClient net;
 MQTTClient client;
 
 #include <ArduinoJson.h>
+bool dumpFlag=true; //flag to trigger an export in loop()
+bool saveFlag=false; //flag to control save to prefernces from loop()
+
 // Time Globals
 time_t now;  // this are the seconds since Epoch (1970) - UTC
 tm tm;       // the structure tm holds time information in a more convenient way *
@@ -103,63 +111,7 @@ uint8_t dy, mt;  // day and month
 uint16_t yr;     // year
 
 unsigned long ms = millis();
-
-void connect() {
-  Serial.print("checking wifi...");
-  while (WiFi.status() != WL_CONNECTED) {
-    Serial.print(".");
-    delay(1000);
-  }
-
-  Serial.print("\nconnecting...");
-  while (!client.connect("esp32_clock", "", "")) {
-    Serial.print(".");
-    delay(1000);
-  }
-
-  Serial.println("\nconnected!");
-
-  //client.subscribe("/esp32_clock/brightness");
-  client.subscribe("/esp32_clock/#");
-  // client.unsubscribe("/hello");
-}
-
-void setupNtpTime() {
-  // Obtain current time and set variables for the Second, Minute and Hour
-  configTime(0, 0, MY_NTP_SERVER);  // 0, 0 because we will use TZ in the next line
-  setenv("TZ", MY_TIMEZONE, 1);     // Set environment variable with your time zone
-  tzset();
-}
-
-void setupWiFi() {
-  // start network
-  WiFi.persistent(false);
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(200);
-    Serial.print(".");
-  }
-  Serial.println("\nWiFi connected");
-  Serial.println(WiFi.localIP());
-}
-
-void printCurrentTime() {;
-  time(&now);              // read the current time
-  localtime_r(&now, &tm);  // update the structure tm with the current time
-  char buf[100];
-  char sDst[5];
-  if(tm.tm_isdst==1)
-    snprintf(sDst,5,"DST");
-  else
-    snprintf(sDst,5,"STD");
-
-  size_t len = strftime(buf, 100, "%Y-%m-%d %H:%M:%S ", &tm);
-
-  Serial.printf("%s %s", buf, sDst);
-  
-  Serial.println();
-}
+int hourDirectCalc = 0;                           //0-23 global hour data gets updated every second, used for AutoDim
 
 // ----------------------------------------------------------------
 // LED
@@ -184,11 +136,174 @@ int hourStartDim = 20; //0 to 23
 int hourStopDim = 6;
 int valueDim=10;
 
+Adafruit_NeoPixel pixels(NPIXELS, DINPIN, NEO_GRB + NEO_KHZ800);
+
+Preferences preferences;
+
+int cnt=0;  //used inside updateDisplay 
+
+unsigned long lastMillis; //used inside loop()
+
+/// convert r,g,b,w values to rgbw 32bit
+uint32_t rgb_to_int(uint8_t r, uint8_t g, uint8_t b, uint8_t w) {
+    return r | (g << 8) | (b << 16) | (w << 24);
+}
+
+/// convert rgbw 32bit to r,g,b,w values
+void rgb_from_int(uint32_t rgbw, uint8_t &r, uint8_t &g, uint8_t &b, uint8_t &w) {
+    b = (rgbw & 0x000000FF);
+    g = (rgbw & 0x0000FF00) >> 8;
+    r = (rgbw & 0x00FF0000) >> 16;
+    w = (rgbw & 0xFF000000) >> 24;
+}
+
+// return a dimmed (or brighter) wrgb value, dim gives percent of change
+uint32_t rgb_dim(uint32_t rgbw, uint8_t dim) {
+    uint8_t b = (rgbw & 0x000000FF);
+    uint8_t g = (rgbw & 0x0000FF00) >> 8;
+    uint8_t r = (rgbw & 0x00FF0000) >> 16;
+    uint8_t w = (rgbw & 0xFF000000) >> 24;
+    b = b/100 * dim;
+    g = g/100 * dim;
+    r = r/100 * dim;
+    uint32_t newWRGB = rgb_to_int(r,g,b,w);
+    return newWRGB;
+}
+
+///mqtt client connect
+void connect() {
+  Serial.print("checking wifi...");
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print(".");
+    delay(1000);
+  }
+
+  Serial.print("\nconnecting...");
+  while (!client.connect("esp32_clock", "", "")) {
+    Serial.print(".");
+    delay(1000);
+  }
+
+  Serial.println("\nconnected!");
+
+  //client.subscribe("/esp32_clock/brightness");
+  client.subscribe("/esp32_clock/#");
+  // client.unsubscribe("/hello");
+}
+
+/// setup ntp tim and timezone incl. DST
+void setupNtpTime() {
+  // Obtain current time and set variables for the Second, Minute and Hour
+  configTime(0, 0, MY_NTP_SERVER);  // 0, 0 because we will use TZ in the next line
+  setenv("TZ", MY_TIMEZONE, 1);     // Set environment variable with your time zone
+  tzset();
+}
+
+/// connect to WiFi
+void setupWiFi() {
+  // start network
+  WiFi.persistent(false);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(200);
+    Serial.print(".");
+  }
+  Serial.println("\nWiFi connected");
+  Serial.println(WiFi.localIP());
+}
+
+/// dump current time to serial
+void printCurrentTime() {;
+  time(&now);              // read the current time
+  localtime_r(&now, &tm);  // update the structure tm with the current time
+  char buf[100];
+  char sDst[5];
+  if(tm.tm_isdst==1)
+    snprintf(sDst,5,"DST");
+  else
+    snprintf(sDst,5,"STD");
+
+  size_t len = strftime(buf, 100, "%Y-%m-%d %H:%M:%S ", &tm);
+
+  Serial.printf("%s %s", buf, sDst);
+  
+  Serial.println();
+}
+
+/// save values to NVS
+void pref_Save(){
+  size_t result=0;
+  preferences.begin("esp32_clock", false);
+  preferences.clear();
+  //                           ....5....0....5
+  result=preferences.putULong("handleHourColor", handleHourColor);
+  if(result==0) Serial.printf("Error in pref_Save for %s\n", "handleHourColor");
+  result=preferences.putULong("handleMinColor", handleMinuteColor);
+  if(result==0) Serial.printf("Error in pref_Save for %s\n", "handleMinColor");
+  result=preferences.putULong("handleSecColor", handleSecondColor);
+  if(result==0) Serial.printf("Error in pref_Save for %s\n", "handleSecColor");
+
+  result=preferences.putUInt("offset", OFFSET);
+  if(result==0) Serial.printf("Error in pref_Save for %s\n", "offset");
+  result=preferences.putUInt("brightness", PIXEL_BRIGHTNESS);
+  if(result==0) Serial.printf("Error in pref_Save for %s\n", "brightness");
+
+  result=preferences.putULong("tickColor", tickColor);
+  if(result==0) Serial.printf("Error in pref_Save for %s\n", "tickColor");
+
+  result=preferences.putBool("dimOn", dimOn);
+  if(result==0) Serial.printf("Error in pref_Save for %s\n", "dimOn");
+  result=preferences.putInt("valueDim", valueDim);
+  if(result==0) Serial.printf("Error in pref_Save for %s\n", "valueDim");
+
+  result=preferences.putInt("hourStartDim", hourStartDim);
+  if(result==0) Serial.printf("Error in pref_Save for %s\n", "hourStartDim");
+  result=preferences.putInt("hourStopDim", hourStopDim);
+  if(result==0) Serial.printf("Error in pref_Save for %s\n", "hourStopDim");
+
+  preferences.end();
+  saveFlag=false;
+  Serial.println("save_Pref done");
+}
+
+/// load values from NVS
+void pref_Load(){
+  preferences.begin("esp32_clock", true);
+  unsigned long ul=0;
+  uint32_t ulDefault=0;
+  ulDefault=handleHourColor;
+  handleHourColor=preferences.getULong("handleHourColor", ulDefault);
+  ulDefault=handleMinuteColor;
+  handleMinuteColor=preferences.getULong("handleMinColor", ulDefault);  
+  ulDefault=handleSecondColor;
+  handleSecondColor=  preferences.getULong("handleSecColor", ulDefault);
+
+  uint uiDef=OFFSET;
+  OFFSET=preferences.getUInt("offset", uiDef);
+  uiDef=PIXEL_BRIGHTNESS;
+  PIXEL_BRIGHTNESS =  preferences.getUInt("brightness", uiDef);
+
+  ulDefault=tickColor;
+  tickColor=preferences.getULong("tickColor", ulDefault);
+
+  bool bDef=dimOn;
+  dimOn=preferences.getBool("dimOn", bDef);
+
+  int iDef=valueDim;
+  valueDim=preferences.getInt("valueDim", iDef);
+  iDef=hourStartDim;
+  hourStartDim=preferences.getInt("hourStartDim", iDef);
+  iDef=hourStopDim;
+  hourStopDim=preferences.getInt("hourStopDim", iDef);
+
+  preferences.end();
+  Serial.println("load_Pref done");
+}
+
 void printTime(int h, int m, int s) {
   Serial.printf("h: %2d m: %2d s: %2d\n", h, m, s);
 }
-
-Adafruit_NeoPixel pixels(NPIXELS, DINPIN, NEO_GRB + NEO_KHZ800);
 
 int index(int i) {
   return (i + OFFSET) % NPIXELS;
@@ -199,7 +314,7 @@ void setPixel(int i, uint32_t color) {
 }
 
 void setPixelBlock(int i, uint32_t color) {
-  pixels.setPixelColor(index(i), color);
+  //pixels.setPixelColor(index(i), color);
   pixels.setPixelColor(index(i-1), color);
   pixels.setPixelColor(index(i+1), color);
 }
@@ -218,7 +333,8 @@ void setTicks(int m) {
 void setHours(int h) {
   uint32_t hourColor = 0x00c83200; //pixels.Color(200, 50, 0); //0x00c83200
   setPixel(h * 5, handleHourColor);  // h: 0..11 = 12 Hours, 5=NumPixels/12
-  setPixelBlock(h*5, handleHourColor);
+  uint32_t newRGBW = rgb_dim(handleHourColor, 50);
+  setPixelBlock(h*5, newRGBW);
 }
 
 void setMinutes(int m) {
@@ -229,7 +345,8 @@ void setMinutes(int m) {
   }
 */
   setPixel(m, handleMinuteColor);
-  setPixelBlock(m, handleMinuteColor);
+  uint32_t newRGBW = rgb_dim(handleMinuteColor, 50);
+  setPixelBlock(m, newRGBW);
 }
 
 void setSeconds(int s) {
@@ -238,7 +355,6 @@ void setSeconds(int s) {
   setPixel(s, handleSecondColor); //pixels.Color(200,0,0)); //0x00c80000
 }
 
-int hourDirectCalc = 0;                           //0-23 global hour data gets updated every second
 //-------------------------------------------------------------------------------
 /*  
  *  HourCalc will calculate the hour indication on a 60 minute scale.
@@ -307,8 +423,6 @@ void showTime(int h, int m, int s) {
   //printTime(h, m, s);
 }
 
-int cnt=0;
-
 void updateDisplay() {
 // Only update the screen once every second and at the start
   if (millis() - ms >= 1000) {
@@ -333,8 +447,6 @@ void updateDisplay() {
     }
   }
 }
-
-bool dumpFlag=true;
 
 void dumpValues(){
   JsonDocument doc;
@@ -424,6 +536,13 @@ void messageReceived(String &topic, String &payload) {
   else if (topic.endsWith("dumpValues")){
     dumpFlag=true;
   }
+  else if (topic.endsWith("save_Pref")){
+    saveFlag=true;
+    pref_Save();
+  }
+  else if (topic.endsWith("load_Pref")){
+    pref_Load();
+  }
 
 }
 
@@ -450,9 +569,8 @@ void setup() {
   pixels.setBrightness(PIXEL_BRIGHTNESS);
   pixels.show();
   
+  pref_Load();
 }
-
-unsigned long lastMillis;
 
 void loop() {
   client.loop();
@@ -466,6 +584,10 @@ void loop() {
 
   if(dumpFlag){
     dumpValues();
+  }
+  if(saveFlag){
+    pref_Save();
+    saveFlag=false;
   }
 /*  if (millis() - lastMillis >= 2*60*1000UL) 
   {
