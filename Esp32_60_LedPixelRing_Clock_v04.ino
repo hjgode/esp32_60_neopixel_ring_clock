@@ -37,6 +37,9 @@
   hourStartDim
   hourStopDim
   dumpValues
+  save_Pref
+  load_Pref
+  isAutoDimmed
 
   doc["offset"]=OFFSET;
   doc["brightness"]=PIXEL_BRIGHTNESS;
@@ -48,9 +51,11 @@
   doc["valueDim"]=valueDim;
   doc["hourStartDim"]=hourStartDim;
   doc["hourStopDim"]=hourStopDim;
+  getAutoDimmed
 
   out only:
   settings
+  isAutoDimmed
 
   Color is a uint_32 adjusted with brightness, 32bit packed RGB value
     r,g,b 0-255
@@ -135,6 +140,7 @@ bool dimOn=true;
 int hourStartDim = 20; //0 to 23
 int hourStopDim = 6;
 int valueDim=10;
+bool flagIsAutoDimmed=false; // publish autocheck dim is on
 
 Adafruit_NeoPixel pixels(NPIXELS, DINPIN, NEO_GRB + NEO_KHZ800);
 
@@ -305,14 +311,17 @@ void printTime(int h, int m, int s) {
   Serial.printf("h: %2d m: %2d s: %2d\n", h, m, s);
 }
 
+//give pixel number for givven pixel count and offset
 int index(int i) {
-  return (i + OFFSET) % NPIXELS;
+  return (i + OFFSET) % NPIXELS; 
 }
 
+//set pixel on LED band regarding offset and num LEDs
 void setPixel(int i, uint32_t color) {
   pixels.setPixelColor(index(i), color);
 }
 
+//set pixel and left and right neighbor pixel
 void setPixelBlock(int i, uint32_t color) {
   //pixels.setPixelColor(index(i), color);
   pixels.setPixelColor(index(i-1), color);
@@ -323,6 +332,7 @@ uint32_t getPixel(int i) {
   return pixels.getPixelColor(index(i));
 }
 
+//set pixel for each hour mark
 void setTicks(int m) {
   //uint32_t tickColor = pixels.Color(tickColor); // pixels.Color(50, 50, 50); //0x00323232
   for (int h = 0; h < 12; h++) {
@@ -330,9 +340,12 @@ void setTicks(int m) {
   }
 }
 
+//show hour pixel on LED circle
 void setHours(int h) {
-  uint32_t hourColor = 0x00c83200; //pixels.Color(200, 50, 0); //0x00c83200
+  //uint32_t hourColor = 0x00c83200; //pixels.Color(200, 50, 0); //0x00c83200
+  
   setPixel(h * 5, handleHourColor);  // h: 0..11 = 12 Hours, 5=NumPixels/12
+  //use a dimmed color for the neighbor pixels
   uint32_t newRGBW = rgb_dim(handleHourColor, 50);
   setPixelBlock(h*5, newRGBW);
 }
@@ -371,15 +384,15 @@ int hourCalc(void ){
   minTemp = timeinfo.tm_min;
 
   if (hourTemp < 12){
-    hourTemp  = hourTemp * 5;
+    hourTemp  = hourTemp * 5; //5 is Pixel_Num / 12 (a lcok shows up to 12 hours)
   }
   else{
     hourTemp  = hourTemp - 12;
     hourTemp  = hourTemp * 5;
   }
   
-  minTemp = minTemp / 12;
-  hourTemp = hourTemp + minTemp;
+  minTemp = minTemp / 12; //minutes divided by 12 
+  hourTemp = hourTemp + minTemp; //11:30 gives 11 * 5 + 30/12 = 57.5 (2.5 Pixels before 12oclock)
 
   return hourTemp;
 }
@@ -393,7 +406,7 @@ int hourCalc(void ){
 //-------------------------------------------------------------------------------
 
 bool checkAutoDim(void){
-  hourCalc(); //update global vars
+  hourCalc(); //update global vars, hourDirectCalc is the hour (0..23)
  if(dimOn)
   {
     if((hourDirectCalc > hourStartDim) || (hourDirectCalc < hourStopDim)){
@@ -412,7 +425,9 @@ void showTime(int h, int m, int s) {
   pixels.clear();
   setMinutes(m);
   setTicks(m);
-  setHours(h);
+  int hourPos = hourCalc(); // use the minutes with hour to calculate a pos on the circle, ie 11:30 gives 57.5 instead of simply 55
+  //setHours(h);
+  setHours(hourPos);
   setSeconds(s);
   pixels.show();
   if(checkAutoDim()){
@@ -428,7 +443,8 @@ void updateDisplay() {
   if (millis() - ms >= 1000) {
     hh = tm.tm_hour;
     // 12 hours clock
-    if (hh > 11) hh = hh - 12;
+    if (hh > 11) 
+      hh = hh - 12;
     
     mm = tm.tm_min;
     // current measure mode, gives acurrent of 100 mA with brightness of 10
@@ -448,6 +464,7 @@ void updateDisplay() {
   }
 }
 
+/// print all values to json and publish to mqtt
 void dumpValues(){
   JsonDocument doc;
   doc["offset"]=OFFSET;
@@ -470,17 +487,23 @@ void dumpValues(){
   dumpFlag=false;
 }
 
+// publishes current time is within AutoDim timespan
+void publishAutoDimmed(){
+  String payload;
+  if(checkAutoDim())
+    payload="on";
+  else
+    payload="off";
+  char mybuf[payload.length()+1];
+  payload.toCharArray(mybuf, sizeof(mybuf));
+  client.publish("/esp32_clock/isAutoDimmed", mybuf, sizeof(mybuf));
+  flagIsAutoDimmed=false;
+}
+
+// mqtt subscribe handler
 void messageReceived(String &topic, String &payload) {
   Serial.println("incoming: " + topic + " - " + payload);
 
-  /*
-  offset
-  brightness
-  handleMinuteColor
-  handleHourColor
-  handleSecondColor
-  tickColor
-  */
   // Note: Do not use the client in the callback to publish, subscribe or
   // unsubscribe as it may cause deadlocks when other things arrive while
   // sending and receiving acknowledgments. Instead, change a global variable,
@@ -543,6 +566,9 @@ void messageReceived(String &topic, String &payload) {
   else if (topic.endsWith("load_Pref")){
     pref_Load();
   }
+  else if (topic.endsWith("getAutoDimmed")){
+    flagIsAutoDimmed=true;
+  }
 
 }
 
@@ -588,6 +614,10 @@ void loop() {
   if(saveFlag){
     pref_Save();
     saveFlag=false;
+  }
+  if(flagIsAutoDimmed){
+    publishAutoDimmed();
+
   }
 /*  if (millis() - lastMillis >= 2*60*1000UL) 
   {
