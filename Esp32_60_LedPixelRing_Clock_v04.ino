@@ -39,7 +39,7 @@
   dumpValues
   save_Pref
   load_Pref
-  isAutoDimmed
+  getAutoDimmed
 
   doc["offset"]=OFFSET;
   doc["brightness"]=PIXEL_BRIGHTNESS;
@@ -373,15 +373,18 @@ void setSeconds(int s) {
  *  HourCalc will calculate the hour indication on a 60 minute scale.
  */
 //-------------------------------------------------------------------------------
-int hourCalc(void ){
+int hourCalc(int hourTemp, int minTemp){
+/*
   struct tm timeinfo;
   getLocalTime(&timeinfo);
   int hourTemp;
   int minTemp;
   
   hourTemp = timeinfo.tm_hour;
-  hourDirectCalc = hourTemp;
   minTemp = timeinfo.tm_min;
+
+*/
+  hourDirectCalc = hourTemp;
 
   if (hourTemp < 12){
     hourTemp  = hourTemp * 5; //5 is Pixel_Num / 12 (a lcok shows up to 12 hours)
@@ -405,8 +408,8 @@ int hourCalc(void ){
  */
 //-------------------------------------------------------------------------------
 
-bool checkAutoDim(void){
-  hourCalc(); //update global vars, hourDirectCalc is the hour (0..23)
+bool checkAutoDim(int h, int m){
+  hourCalc(h, m); //update global vars, hourDirectCalc is the hour (0..23)
  if(dimOn)
   {
     if((hourDirectCalc > hourStartDim) || (hourDirectCalc < hourStopDim)){
@@ -425,12 +428,12 @@ void showTime(int h, int m, int s) {
   pixels.clear();
   setMinutes(m);
   setTicks(m);
-  int hourPos = hourCalc(); // use the minutes with hour to calculate a pos on the circle, ie 11:30 gives 57.5 instead of simply 55
+  int hourPos = hourCalc(h, m); // use the minutes with hour to calculate a pos on the circle, ie 11:30 gives 57.5 instead of simply 55
   //setHours(h);
   setHours(hourPos);
   setSeconds(s);
   pixels.show();
-  if(checkAutoDim()){
+  if(checkAutoDim(h, m)){
     pixels.setBrightness(valueDim);
   }else{
     pixels.setBrightness(PIXEL_BRIGHTNESS);
@@ -480,7 +483,7 @@ void dumpValues(){
 
   String payload;
   serializeJsonPretty(doc, payload);
-  char mybuf[payload.length()+1];
+  char mybuf[payload.length()];
   payload.toCharArray(mybuf, sizeof(mybuf));
 
   client.publish("/esp32_clock/settings", mybuf, sizeof(mybuf));
@@ -490,11 +493,11 @@ void dumpValues(){
 // publishes current time is within AutoDim timespan
 void publishAutoDimmed(){
   String payload;
-  if(checkAutoDim())
+  if(checkAutoDim(hh, mm))
     payload="on";
   else
     payload="off";
-  char mybuf[payload.length()+1];
+  char mybuf[payload.length()]; //initialized with \0, no need to add +1
   payload.toCharArray(mybuf, sizeof(mybuf));
   client.publish("/esp32_clock/isAutoDimmed", mybuf, sizeof(mybuf));
   flagIsAutoDimmed=false;
