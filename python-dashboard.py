@@ -10,6 +10,42 @@ client_id = 'your client id'
 username = ''
 password = ''
 deviceId = "esp32_dashboard"
+'''
+{
+  "offset": 0,
+  "brightness": 20,
+  "handleHourColor": 16711680,
+  "handleMinuteColor": 65280,
+  "handleSecondColor": 64,
+  "tickColor": 3289650,
+  "dimOn": true,
+  "valueDim": 10,
+  "hourStartDim": 20,
+  "hourStopDim": 6
+}
+
+MQTT set options
+  brightness  0-255
+  offset      0-59
+  handleMinuteColor as 32Bit Hex number, ie 001f3a40
+  handleHourColor
+  handleSecondColor
+  tickColor
+  dimOn
+  valueDim
+  hourStartDim
+  hourStopDim
+  dumpValues
+  save_Pref
+  load_Pref
+  getAutoDimmed
+
+out:
+  settings
+  isAutoDimmed
+
+
+'''
 def connect_mqtt():
     def on_connect(client, userdata, flags, rc):
         if rc==0:

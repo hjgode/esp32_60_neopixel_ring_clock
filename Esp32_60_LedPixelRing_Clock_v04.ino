@@ -343,11 +343,13 @@ void setTicks(int m) {
 //show hour pixel on LED circle
 void setHours(int h) {
   //uint32_t hourColor = 0x00c83200; //pixels.Color(200, 50, 0); //0x00c83200
-  
-  setPixel(h * 5, handleHourColor);  // h: 0..11 = 12 Hours, 5=NumPixels/12
+  //already aligned in getHourMin
+  setPixel(h, handleHourColor);
+//  setPixel(h * 5, handleHourColor);  // h: 0..11 = 12 Hours, 5=NumPixels/12
   //use a dimmed color for the neighbor pixels
   uint32_t newRGBW = rgb_dim(handleHourColor, 50);
-  setPixelBlock(h*5, newRGBW);
+  setPixelBlock(h, newRGBW);
+//  setPixelBlock(h*5, newRGBW);
 }
 
 void setMinutes(int m) {
@@ -371,9 +373,12 @@ void setSeconds(int s) {
 //-------------------------------------------------------------------------------
 /*  
  *  HourCalc will calculate the hour indication on a 60 minute scale.
+   06:15 gives 6 * 5 + 15/12 = 31,25
+   11:30 gives 11 * 5 + 30/12 = 57.5 (2.5 Pixels before 12oclock)
+
  */
 //-------------------------------------------------------------------------------
-int hourCalc(int hourTemp, int minTemp){
+int getHourMin(int hourTemp, int minTemp){
 /*
   struct tm timeinfo;
   getLocalTime(&timeinfo);
@@ -395,8 +400,9 @@ int hourCalc(int hourTemp, int minTemp){
   }
   
   minTemp = minTemp / 12; //minutes divided by 12 
-  hourTemp = hourTemp + minTemp; //11:30 gives 11 * 5 + 30/12 = 57.5 (2.5 Pixels before 12oclock)
-
+  hourTemp = hourTemp + minTemp; 
+  //11:30 gives 11 * 5 + 30/12 = 57.5 (2.5 Pixels before 12oclock)
+  //06:15 gives 6 * 5 + 15/12 = 31,25
   return hourTemp;
 }
 
@@ -409,7 +415,7 @@ int hourCalc(int hourTemp, int minTemp){
 //-------------------------------------------------------------------------------
 
 bool checkAutoDim(int h, int m){
-  hourCalc(h, m); //update global vars, hourDirectCalc is the hour (0..23)
+  getHourMin(h, m); //update global vars, hourDirectCalc is the hour (0..23)
  if(dimOn)
   {
     if((hourDirectCalc > hourStartDim) || (hourDirectCalc < hourStopDim)){
@@ -428,7 +434,7 @@ void showTime(int h, int m, int s) {
   pixels.clear();
   setMinutes(m);
   setTicks(m);
-  int hourPos = hourCalc(h, m); // use the minutes with hour to calculate a pos on the circle, ie 11:30 gives 57.5 instead of simply 55
+  int hourPos = getHourMin(h, m); // use the minutes with hour to calculate a pos on the circle, ie 11:30 gives 57.5 instead of simply 55
   //setHours(h);
   setHours(hourPos);
   setSeconds(s);
