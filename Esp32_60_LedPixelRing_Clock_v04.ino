@@ -489,7 +489,7 @@ void dumpValues(){
 
   String payload;
   serializeJsonPretty(doc, payload);
-  char mybuf[payload.length()];
+  char mybuf[payload.length()+1];
   payload.toCharArray(mybuf, sizeof(mybuf));
 
   client.publish("/esp32_clock/settings", mybuf, sizeof(mybuf));
@@ -503,9 +503,9 @@ void publishAutoDimmed(){
     payload="on";
   else
     payload="off";
-  char mybuf[payload.length()]; //initialized with \0, no need to add +1
-  payload.toCharArray(mybuf, sizeof(mybuf));
-  client.publish("/esp32_clock/isAutoDimmed", mybuf, sizeof(mybuf));
+//  char mybuf[payload.length()]; //initialized with \0, no need to add +1
+//  payload.toCharArray(mybuf, sizeof(mybuf));
+  client.publish("/esp32_clock/isAutoDimmed", (char*) payload.c_str(), sizeof(mybuf));
   flagIsAutoDimmed=false;
 }
 
