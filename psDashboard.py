@@ -1,6 +1,7 @@
 # Designed with https://visualtkinter.com - paste this file into File > Import there to edit it visually
 import tkinter as tk
 from tkinter import ttk
+from tkinter import colorchooser
 from paho.mqtt import client as mqtt_client
 import json
 
@@ -14,6 +15,40 @@ client_id = 'esp32_dashboard'
 username = ''
 password = ''
 deviceId = "esp32_dashboard"
+
+#global dictionary for the values
+mySettingsDict={}
+mySettingsDict["colorHour"] = 0x1f
+mySettingsDict["colorMinute"] = 0x1f
+mySettingsDict["colorSecond"] = 0x1f
+mySettingsDict["brightness"] = 20
+mySettingsDict["tickColor"] = 0x00323232
+mySettingsDict["dimOn"] = True
+mySettingsDict["valueDim"] = 10
+mySettingsDict["hourStartDim"] = 20
+mySettingsDict["hourStopDim"] = 6
+#mySettingsDict["dumpValues
+#mySettingsDict["save_Pref
+#load_Pref
+#mySettingsDict["getAutoDimmed
+
+mySettingsDict["isAutoDimmed"] = True
+
+myTopicMappingDict={}
+myTopicMappingDict["colorHour"] = "handleHourColor"
+myTopicMappingDict["colorMinute"] = "handleMinuteColor"
+myTopicMappingDict["colorSecond"] = "handleSecondColor"
+myTopicMappingDict["brightness"] = "brightness"
+myTopicMappingDict["tickColor"] = "tickColor"
+myTopicMappingDict["dimOn"] = "dimOn"
+myTopicMappingDict["valueDim"] = "valueDim"
+myTopicMappingDict["hourStartDim"] = "hourStartDim"
+myTopicMappingDict["hourStopDim"] = "hourStopDim"
+
+def getTopicForKey(what:str):
+    if(what in myTopicMappingDict):
+        return(myTopicMappingDict[what])
+    pass
 
 '''
   possible mqtt values
@@ -99,6 +134,21 @@ def subscribe(client: mqtt_client):
     client.subscribe(topic_sub)
     client.on_message = on_message
 
+'''
+  doc["offset"]=OFFSET;
+  doc["brightness"]=PIXEL_BRIGHTNESS;
+  doc["handleHourColor"]=handleHourColor;
+  doc["handleMinuteColor"]=handleMinuteColor;
+  doc["handleSecondColor"]=handleSecondColor;
+  doc["tickColor"]=tickColor;
+  doc["dimOn"]=dimOn;
+  doc["valueDim"]=valueDim;
+  doc["hourStartDim"]=hourStartDim;
+  doc["hourStopDim"]=hourStopDim;
+'''
+# print(d["name"])     # Access using key
+# print(d.get("age"))  # Access using get()
+
 class MQTTClient:
     def __init__(self, broker, port, wind):
         self.client = mqtt_client.Client()
@@ -141,10 +191,11 @@ class MQTTClient:
         
 class Main:
     def __init__(self, root):
-        mqtt_client = MQTTClient(broker, port, self)
-        mqtt_client.connect()
+        self.root=root
+        self.mqtt_client = MQTTClient(broker, port, self)
+        self.mqtt_client.connect()
         msg=1
-        result = mqtt_client.publish(topic_pub, "1") #request settings
+        result = self.mqtt_client.publish(topic_pub, "1") #request settings
         # result: [0, 1]
         status = result[0]
         if status == 0:
@@ -154,10 +205,30 @@ class Main:
 
         self.root = root
         root.title("Main")
-        root.geometry("520x380")
+        root.geometry("600x480")
+        root.resizable(False, False)
+        
+        global mySettingsDict
 
         self.settings = None
         self.SettingsValue = None
+        self.UpdateForm=None
+        self.helligkeitsForm=None
+
+        self.colorHour=0x1f
+        self.colorMinute=0x1f
+        self.colorSecond=0x1f
+        self.brightness=20
+        self.tickColor=0x00323232
+        self.dimOn=True
+        self.valueDim=10
+        self.hourStartDim=20
+        self.hourStopDim=6
+        #self.dumpValues
+        #self.save_Pref
+        #load_Pref
+        #self.getAutoDimmed
+        self.isAutoDimmed=True
 
         self.buttonDumpValues = tk.Button(root, text="Get Settings", command=self.dumpSettings)
         self.buttonDumpValues.place(x=20, y=20, width=96, height=32)
@@ -178,8 +249,8 @@ class Main:
         self.textHandleHourColor = tk.Text(root)
         self.textHandleHourColor.place(x=150, y=180, width=80, height=20)
 
-        self.buttonFarbeHour = tk.Button(root, text="Farbe", command=self.getColorHour)
-        self.buttonFarbeHour.place(x=230, y=174, width=96, height=32)
+        self.buttonColorHour = tk.Button(root, text="Farbe", command=self.getColorHour)
+        self.buttonColorHour.place(x=230, y=174, width=96, height=32)
 
         self.buttonColorMinute = tk.Button(root, text="Farbe", command=self.getColorMinute)
         self.buttonColorMinute.place(x=230, y=220, width=96, height=32)
@@ -198,6 +269,97 @@ class Main:
 
         self.buttonColorSecond = tk.Button(root, text="Farbe", command=self.getColorSecond)
         self.buttonColorSecond.place(x=230, y=270, width=96, height=32)
+
+        # Helligkeit
+        self.label5 = tk.Label(root, text="Helligkeit:")
+        self.label5.place(x=55, y=320, width=90, height=26)
+
+        self.textBrightness = tk.Text(root)
+        self.textBrightness.place(x=150, y=330, width=60, height=20)
+
+        self.buttonHelligkeit = tk.Button(root, text="Helligkeit", command=self.on_buttonHelligkeit)
+        self.buttonHelligkeit.place(x=230, y=324, width=96, height=32)
+
+        # tickColor
+        self.TickColor = tk.Label(root, text="TickColor:")
+        self.TickColor.place(x=55, y=370, width=90, height=26)
+
+        self.textTickColor = tk.Text(root)
+        self.textTickColor.place(x=150, y=376, width=60, height=20)
+
+        self.buttonTickColor = tk.Button(root, text="Farbe", command=self.on_buttonTickColor)
+        self.buttonTickColor.place(x=230, y=370, width=96, height=32)
+
+        # autoDim
+        self.checkbuttonAutoDim_var=tk.BooleanVar(value=self.dimOn)
+        self.checkbuttonAutoDim = tk.Checkbutton(root, text="AutoDim", variable=self.checkbuttonAutoDim_var, onvalue=True, offvalue=False, command=self.on_DimOnChange)
+        self.checkbuttonAutoDim.place(x=380, y=180, width=120, height=26)
+
+        self.label10 = tk.Label(root, text="Start:")
+        self.label10.place(x=380, y=210, width=70, height=30)
+
+        self.spinAutoDimStartValue=tk.StringVar(value=int(self.hourStartDim))
+        self.spinboxAutoDimStart = tk.Spinbox(root, from_=0, to=23, textvariable=self.spinAutoDimStartValue, command=self.on_AutoDimStart_changed)
+        self.spinboxAutoDimStart.place(x=460, y=210, width=70, height=30)
+        self.spinboxAutoDimStart.setvar
+
+        self.label11 = tk.Label(root, text="Stop:")
+        self.label11.place(x=380, y=246, width=70, height=30)
+
+        self.spinAutoDimStopValue=tk.StringVar(value=str(self.hourStopDim))
+        self.spinboxAutoDimStop = tk.Spinbox(root, from_=0, to=23, textvariable=self.spinAutoDimStopValue,command=self.on_AutoDimStop_changed)
+        self.spinboxAutoDimStop.place(x=460, y=245, width=70, height=30)
+
+        # valueDim
+        self.buttonValueDim = tk.Button(root, text="Helligkeit", command=self.onValueDimClicked)
+        self.buttonValueDim.place(x=465, y=286, width=96, height=32)
+
+        self.textValueDim = tk.Text(root)
+        self.textValueDim.place(x=395, y=286, width=60, height=20)
+        self.setText(self.textValueDim, self.valueDim)
+
+        #update
+        self.buttonUpdate = tk.Button(root, text="Send Update", command=self.on_sendUpdate_clicked)
+        self.buttonUpdate.place(x=482, y=20, width=96, height=32)
+
+        #prefs
+        self.buttonLoadPrefs = tk.Button(root, text="Load Prefs", command=self.sendLoadPrefs)
+        self.buttonLoadPrefs.place(x=482, y=69, width=96, height=32)
+
+        self.buttonSavePrefs = tk.Button(root, text="Save Prefs", command=self.sendSavePrefs)
+        self.buttonSavePrefs.place(x=482, y=108, width=96, height=32)
+
+        self.button1Close = tk.Button(root, text="Close", command=self.onButtonClose_Click)
+        self.button1Close.place(x=482, y=386, width=96, height=32)
+
+        pass
+
+    def onButtonClose_Click(self):
+        root.destroy()
+        pass
+    
+    def on_DimOnChange(self):
+        self.dimOn=self.checkbuttonAutoDim_var.get()
+        print ("DimOn changed: " + str(self.dimOn))
+        pass
+
+    def on_AutoDimStart_changed(self):
+        self.hourStartDim=self.spinAutoDimStartValue.get()
+        # print("AutoDimStart changed: " + str(self.hourStartDim))
+        pass
+    def on_AutoDimStop_changed(self):
+        self.hourStopDim=self.spinAutoDimStopValue.get()
+        pass
+    
+    def setHelligkeit(self, value):
+        self.brightness = value;
+        self.setText(self.textBrightness, value)
+        pass
+
+    def setTickColor(self, value):
+        self.tickColor=value
+        self.setText(self.textTickColor, value)
+        pass
 
     def setText(self, txtObj, txt):
         txtObj.delete(1.0, "end")
@@ -227,60 +389,216 @@ class Main:
         self.colorMinute=y["handleHourColor"]
         self.colorSecond=y["handleSecondColor"]
 
+        self.brightness=y["brightness"]
+        self.tickColor=y["tickColor"]
+        self.dimOn=y["dimOn"]
+        self.valueDim=y["valueDim"]
+        self.hourStartDim=y["hourStartDim"]
+        self.hourStopDim=y["hourStopDim"]
+        #self.isAutoDimmed=y["isAutoDimmed"]        
+
+        # Handle Colors
         self.setText(self.textHandleHourColor, str(y["handleHourColor"]))
         self.setText(self.textHandleMinuteColor, str(y["handleMinuteColor"]))
         self.setText(self.textHandleSecondColor, str(y["handleSecondColor"]))
+
+        # Helligkeit
+        self.setText(self.textBrightness, self.brightness)
+        self.setTickColor(self.tickColor)
+
+        #update mySettingsDict
+        cnt=0
+        for key in y:
+            data=y[key]
+            mySettingsDict[key]=data
+            cnt=cnt+1
+        print("updated mySettingsDict: " + str(cnt))
         pass
 
     def update(self, n):
         self.SettingsValue = n
         print(self.SettingsValue)
   
-    def openSettings(self):
-        self.settings = Form2(self.update, root)
-  
     def updateLabelinSettings(self):
         #prompt = askinteger("Input", "Input an Integer")
         if self.settings != None:
             self.settings.label.configure(text="Updated")
 
-    def open_form_2(self):
-        return Form2(self.root)
-
     def dumpSettings(self):
         pass
 
+    def getText(self, txtbox):
+        return txtbox.get("1.0", "end")
+    
+    # use right publish topics not yet in dict!
+    # see getTopicForKey(what)
+    #TODO dumpValues and topics to be used do not have the same names!
+    def updateDictSettings(self):
+        for key in mySettingsDict.keys():
+            if(key=="colorSecond"):
+                mySettingsDict[key]=self.getText(self.textHandleSecondColor)
+            elif(key=="colorHour"):
+                mySettingsDict[key]=self.getText(self.textHandleHourColor)
+            elif(key=="colorMinute"):
+                mySettingsDict[key]=self.getText(self.textHandleHourColor)
+            elif(key=="brightness"):
+                mySettingsDict[key]=self.getText(self.textBrightness)
+            elif (key=="tickColor"):
+                mySettingsDict[key]=self.getText(self.textTickColor)
+            elif (key=="dimOn"):
+                mySettingsDict[key]=self.checkbuttonAutoDim_var.get()
+            elif(key=="ValueDim"):
+                mySettingsDict[key]=self.getText(self.textValueDim)
+            elif(key=="hourStartDim"):
+                mySettingsDict[key]=self.spinAutoDimStartValue.get()
+            elif(key=="hourStopDim"):
+                mySettingsDict[key]=self.spinAutoDimStopValue.get()
+
+        pass
+
+    def on_sendUpdate_clicked(self):
+        self.updateDictSettings()
+        liste=(mySettingsDict.keys)
+        self.UpdateForm = UpdateForm(self, listvar=liste, master=self.root)
+        pass
+
+    def onValueDimClicked(self):
+        helligkeit=self.textValueDim.get("1.0","end")
+        self.helligkeitsForm = Helligkeit(self, helligkeit, self.textValueDim, self.root)
+        pass
+
+    def on_buttonHelligkeit(self):
+        helligkeit=self.textBrightness.get("1.0","end")
+        self.helligkeitsForm = Helligkeit(self, helligkeit, self.textBrightness, self.root)
+        pass
+
+    def on_buttonTickColor(self):
+        #in 0x323232 (50,50,50)
+        iRGB=int(self.textTickColor.get(1.0,"end"))
+        tkRGB=self.int2RGBstr(iRGB)
+
+        (tkColorTuple, tkColorStr)=self.selectColorDialog(titel="Ticks Farbe", color=tkRGB) #TODO
+        #out 320000
+        if(tkColorStr != None):
+            iRGB=self.getIntFromTuple(tkColorTuple=tkColorTuple)
+            self.setText(self.textTickColor, str(iRGB))
+
+        #tickColor=self.textTickColor.get("1.0","end")
+        #self.settings = FormColor(self.update, self, tickColor, self.textTickColor, self.root)
+        #self.helligkeitsForm = Helligkeit(self, helligkeit, self.textBrightness, self.root)
+        pass
+
     def getColorHour(self):
-        #inputDialog = Form2(root)
-        #root.wait_window(inputDialog.top)
-        self.settings = Form2(self.update, self, self.textHandleHourColor.get("1.0","end"), self.textHandleHourColor)
+        iRGB=int(self.textHandleHourColor.get(1.0,"end"))
+        tkRGB=self.int2RGBstr(iRGB)
+
+        (tkColorTuple, tkColorStr)=self.selectColorDialog(titel="Stunden Zeiger Farbe", color=tkRGB) #TODO
+        if(tkColorStr != None):
+            iRGB=self.getIntFromTuple(tkColorTuple=tkColorTuple)
+            self.setText(self.textHandleHourColor, str(iRGB))
+        #self.settings = FormColor(self.update, self, self.textHandleHourColor.get("1.0","end"), self.textHandleHourColor, self.root)
         pass
 
     def getColorMinute(self):
-        self.settings = Form2(self.update, self, self.textHandleMinuteColor.get("1.0","end"), self.textHandleMinuteColor)
+        iRGB=int(self.textHandleMinuteColor.get(1.0,"end"))
+        tkRGB=self.int2RGBstr(iRGB)
+
+        (tkColorTuple, tkColorStr)=self.selectColorDialog(titel="Minuten Zeiger Farbe", color=tkRGB) #TODO
+        if(tkColorStr != None):
+            iRGB=self.getIntFromTuple(tkColorTuple=tkColorTuple)
+            self.setText(self.textHandleMinuteColor, str(iRGB))
+        #self.settings = FormColor(self.update, self, self.textHandleMinuteColor.get("1.0","end"), self.textHandleMinuteColor, self.root)
         pass
 
     def getColorSecond(self):
-        self.settings = Form2(self.update, self, self.textHandleSecondColor.get("1.0","end"), self.textHandleSecondColor)
+        iRGB=int(self.textHandleSecondColor.get(1.0,"end"))
+        tkRGB=self.int2RGBstr(iRGB)
+
+        (tkColorTuple, tkColorStr)=self.selectColorDialog(titel="Sekunden Zeiger Farbe", color=tkRGB) #TODO
+        if(tkColorStr != None):
+            iRGB=self.getIntFromTuple(tkColorTuple=tkColorTuple)
+            self.setText(self.textHandleSecondColor, str(iRGB))
+        #self.settings = FormColor(self.update, self, self.textHandleSecondColor.get("1.0","end"), self.textHandleSecondColor, self.root)
         pass
 
+    def sendSavePrefs(self):
+        self.mqtt_client.publish("/esp32_clock/save_Pref", "1")
+        pass
+    def sendLoadPrefs(self):
+        self.mqtt_client.publish("/esp32_clock/load_Pref", "1")
+        self.mqtt_client.publish("/esp32_clock/dumpValues", "1")
+        pass
 
-class Form2:
-    def __init__(self, func, callerWin, sRGB, callerText): #master):
-        self.win=tk.Toplevel()
+    def rgb_to_hex(self, r, g, b):
+        s='#' + ''.join('{:02X}'.format(value) for value in (r, g, b))
+        s=s[0:7]
+        return s
+
+    # convert int to tk hex color
+    def int2RGB(self, i):
+        r=i & 0xff0000
+        g=i & 0x00ff00
+        b=i & 0x0000ff
+
+        return self.rgb_to_hex(r,g,b)
+        pass
+    
+    def int2RGBstr(self,i):
+        r=i & 0xff0000
+        g=i & 0x00ff00
+        b=i & 0x0000ff
+        tkColor='#' + format(i, '06x')
+        return tkColor
+#        return self.rgb_to_hex(r,g,b)    
+        pass
+
+    def getRGB(self):
+        R=self.Color_R.get()
+        G=self.color_G.get()
+        B=self.color_B.get()
+
+        self.rgbStr=self.rgb_to_hex(R, G, B)
+        self.colorRGB=self.rgbStr
+        return self.rgbStr
+        
+    def getRGBint(self):
+        R=self.Color_R.get()
+        G=self.color_G.get()
+        B=self.color_B.get()
+        i = R * 0xff00 + G * 0x00ff + B 
+        return i
+        pass
+    def getIntFromTuple(self, tkColorTuple):
+        # (r,g,b)
+        str='%02x%02x%02x' % tkColorTuple
+        iColor=int(str,16)
+        return iColor
+        pass
+
+    # show colorchooser, in Title string and tkColor preset
+    def selectColorDialog(self, color:str, titel:str):
+        c_code=tk.colorchooser.askcolor(title=titel, color=color)
+        print("colorchooser: ")
+        print(c_code) # returns a tuple of (r,g,b) and the tk color string #0a1fcc
+        # ((145, 217, 217), '#91d9d9')
+        (rgbTuple, tkColor)=c_code
+        return (rgbTuple, tkColor)
+        pass
+'''    
+class FormColor:
+    def __init__(self, func, callerWin, sRGB, callerText, master):
+        self.win=tk.Toplevel(master)
+        self.win.resizable(False, False)
+        
         self.func=func 
         self.caller=callerWin
         self.callerText=callerText
         
         self.rgbStr=sRGB
 
-        #root = tk.Toplevel(master)
-        #self.root = root
         self.win.title("Settings")
         self.win.geometry("520x380")
         root=self.win
-        #root.title("Form 2")
-        #root.geometry("520x380")
 
         self.var = tk.IntVar()
         self.OkCancel=False
@@ -337,6 +655,7 @@ class Form2:
         self.func(self.var.get())
 
     def on_buttonCancel(self):
+        self.win.destroy()
         pass
 
     def rgb_to_hex(self, r, g, b):
@@ -351,6 +670,7 @@ class Form2:
 
         return self.rgb_to_hex(r,g,b)
         pass
+
     def int2RGBstr(self,i):
         r=i & 0x00ff0000
         g=i & 0x0000ff00
@@ -406,8 +726,158 @@ class Form2:
         self.textColor.config(bg=newColor);
         self.setText(self.textColor, newColor)
         pass
+'''
+
+class Helligkeit:
+    def __init__(self, callerWin, helligkeit, callerText, master):
+        self.win=tk.Toplevel(master)
+        self.win.title("Helligkeit")
+        self.win.geometry("520x380")
+        self.win.resizable(False, False)
+        root=self.win
+        self.callerText=callerText
+
+        self.helligkeit=helligkeit
+        self.caller=callerWin
+
+        self.label1 = tk.Label(root, text="Helligkeit:")
+        self.label1.place(x=30, y=20, width=90, height=26)
+
+        self.scale1 = tk.Scale(root, from_=0, to=255, orient="horizontal", command=self.on_change)
+        self.scale1.place(x=60, y=70, width=180, height=48)
+
+        self.buttonOK = tk.Button(root, text="OK", command=self.button_OK_clicked)
+        self.buttonOK.place(x=380, y=300, width=96, height=32)
+
+        self.canvas1ShowBrightness = tk.Canvas(root, bg="#000000", highlightthickness=1, highlightbackground="#828282")
+        self.canvas1ShowBrightness.place(x=308, y=46, width=120, height=90)
+        
+        self.buttonCancel = tk.Button(root, text="Cancel", command=self.button_Cancel_clicked)
+        self.buttonCancel.place(x=260, y=304, width=96, height=32)
+#        self.buttonCancel.bind("<Button-1>", self.on_buttonCancel_button_1)
+
+        #set scale value
+        self.scale1.set(self.helligkeit)
+        pass
+
+    def button_OK_clicked(self):
+#        self.callback(self.helligkeit)
+        # get scale value
+
+        self.caller.setText(self.callerText, str(self.scale1.get()))
+        self.win.destroy()
+        pass
+
+    def button_Cancel_clicked(self):
+        self.win.destroy()
+        pass
+
+    def setScale(self, scaleObj, val):
+        scaleObj.set(val)
+        pass
+
+    def rgb_to_hex(self, r, g, b):
+        s='#' + ''.join('{:02X}'.format(value) for value in (r, g, b))
+        s=s[0:7]
+        return s
+    
+    def on_change(self, value):
+        v=int(value)
+        s=self.rgb_to_hex(v, v, v)
+        #self.setScale(self.canvas1ShowBrightness, s)
+        self.canvas1ShowBrightness.config(background=s)
+        pass
+
+#update form
+class UpdateForm:
+    def __init__(self, callerWin, listvar, master):
+        self.win = tk.Toplevel(master)
+        root=self.win
+        self.win.title("Update")
+        self.win.geometry("520x380")
+        self.win.resizable(False, False)
+
+
+        self.mqtt = MQTTClient("192.168.0.40", 1883, self)
+        self.mqtt.connect()
+        
+        global mySettingsDict
+        list_variable=mySettingsDict.keys()
+
+        frame=tk.Frame(self.win)
+        frame.pack(side="left", padx=20, pady=20, anchor="nw")
+        
+        self.listbox1 = tk.Listbox(frame, selectmode="multiple", listvariable=list_variable)
+        self.listbox1.pack(side="left",fill="y")
+
+        scrollbar = tk.Scrollbar(frame, orient="vertical")
+        scrollbar.config(command=self.listbox1.yview)
+        scrollbar.pack(side="right", fill="y")
+        
+        self.listbox1.config(yscrollcommand=scrollbar.set)
+
+        #self.listbox1 = tk.Listbox(root, selectmode="multiple", listvariable=list_variable)
+        for item in mySettingsDict.keys():
+            self.listbox1.insert("end", item)
+        '''
+        self.listbox1.insert("end", "Item 1")
+        self.listbox1.insert("end", "Item 2")
+        self.listbox1.insert("end", "Item 3")
+        '''
+        #self.listbox1.place(x=20, y=23, width=160, height=110)
+        self.listbox1.bind('<<ListboxSelect>>', self.handle_item_select)
+
+        scrollbar=tk.Scrollbar(self.listbox1, orient="vertical")
+        scrollbar.config(command=self.listbox1.yview)
+
+        self.buttonUpdate = tk.Button(root, text="Send Update", command=self.on_sendUpdate_clicked)
+        self.buttonUpdate.place(x=282, y=20, width=96, height=32)
+        self.win.protocol("WM_DELETE_WINDOW", self.on_closing)
+
+    def on_closing(self):
+        print("UpdateForm closing called")
+        self.mqtt.disconnect()
+        del self.mqtt
+        self.win.destroy()
+        pass
+
+    def __del__(self):
+        print("UpdateForm delete called")
+        self.mqtt.disconnect()
+        del self.mqtt
+        pass
+
+    #needed for MQTT class    
+    def updateDumpTxt(self, text):
+        print("UpdateForm: updateDumpText" + text)
+        pass
+
+    def handle_item_select(self, event):
+        selected_indices = self.listbox1.curselection()
+        selected_items = ",".join([self.listbox1.get(i) for i in selected_indices])
+        print("Selected: " + selected_items)
+        '''
+        showinfo(
+            title='Information', 
+            message=f'You selected: {selected_languages}'
+        )
+        '''
+    def on_sendUpdate_clicked(self):
+        selected_indices = self.listbox1.curselection()
+        for i in selected_indices:
+            k=self.listbox1.get(i)
+            topic=getTopicForKey(k)
+            payload=str(mySettingsDict.get(k))
+            if(payload.endswith("\n")):
+                payload=payload.strip("\n")
+            payload=payload.strip()
+            self.mqtt.publish("/esp32_clock/" + topic, payload)
+            print("updating " + topic + " to " +str(mySettingsDict.get(k)))
+            
+        pass
 
 if __name__ == "__main__":
     root = tk.Tk()
     app = Main(root)
+    root.resizable(False,False)
     root.mainloop()

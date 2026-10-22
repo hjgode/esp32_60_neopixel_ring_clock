@@ -133,7 +133,7 @@ uint8_t OFFSET = 0;
 uint32_t handleMinuteColor = 0x0000ff00; //0x00646400; //(uint32_t)strtoul("00646400", NULL, 16); //100, 100, 0;
 //   printf("value = %u 0x%08x\n", handleMinuteColor, handleMinuteColor);
 uint32_t handleHourColor=0x00ff0000;// 0x00c83200;
-uint32_t handleSecondColor=0x0000001f;
+uint32_t handleSecondColor=0x0000001f; //64
 uint32_t tickColor = 0x00323232; //pixels.Color(50, 50, 50); //0x00323232;
 
 bool dimOn=true;
