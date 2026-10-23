@@ -141,6 +141,7 @@ int hourStartDim = 20; //0 to 23
 int hourStopDim = 6;
 int valueDim=10;
 bool flagIsAutoDimmed=false; // publish autocheck dim is on
+int lastCurrentHour=-1; //track autoDim check
 
 Adafruit_NeoPixel pixels(NPIXELS, DINPIN, NEO_GRB + NEO_KHZ800);
 
@@ -413,12 +414,19 @@ int getHourMin(int hourTemp, int minTemp){
  *  for example at night the clock does not need to be very bright.
  */
 //-------------------------------------------------------------------------------
-
-bool checkAutoDim(int h, int m){
-  getHourMin(h, m); //update global vars, hourDirectCalc is the hour (0..23)
+bool checkAutoDim(int h){
+  struct tm timeinfo;
+  getLocalTime(&timeinfo);
+  int hourTemp;
+  int minTemp;
+  hourTemp = timeinfo.tm_hour;
+  //getHourMin(h, m); //update global vars, hourDirectCalc is the hour (0..23)
  if(dimOn)
   {
-    if((hourDirectCalc > hourStartDim) || (hourDirectCalc < hourStopDim)){
+//    Serial.printf("hour=%i, StartDim=%i StopDim=%i", hourTemp, hourStartDim, hourStopDim);
+    // start=20 stop=06
+    // start=13 stop=15
+    if((hourTemp >= hourStartDim) || (hourTemp < hourStopDim)){
       return true;
     }
     else{
@@ -439,10 +447,15 @@ void showTime(int h, int m, int s) {
   setHours(hourPos);
   setSeconds(s);
   pixels.show();
-  if(checkAutoDim(h, m)){
-    pixels.setBrightness(valueDim);
-  }else{
-    pixels.setBrightness(PIXEL_BRIGHTNESS);
+  if(lastCurrentHour!=h){
+    if(checkAutoDim(h)){
+      //Serial.println("AutoDim on");
+      pixels.setBrightness(valueDim);
+    }else{
+      //Serial.println("AutoDim OFF");
+      pixels.setBrightness(PIXEL_BRIGHTNESS);
+    }
+    lastCurrentHour=h;
   }
   //printTime(h, m, s);
 }
@@ -499,12 +512,12 @@ void dumpValues(){
 // publishes current time is within AutoDim timespan
 void publishAutoDimmed(){
   String payload;
-  if(checkAutoDim(hh, mm))
+  if(checkAutoDim(hh))
     payload="on";
   else
     payload="off";
-//  char mybuf[payload.length()]; //initialized with \0, no need to add +1
-//  payload.toCharArray(mybuf, sizeof(mybuf));
+  char mybuf[payload.length()]; //initialized with \0, no need to add +1
+  payload.toCharArray(mybuf, sizeof(mybuf));
   client.publish("/esp32_clock/isAutoDimmed", (char*) payload.c_str(), sizeof(mybuf));
   flagIsAutoDimmed=false;
 }

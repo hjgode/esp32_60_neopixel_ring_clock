@@ -180,7 +180,10 @@ class MQTTClient:
             if (not payload.endswith("}")):
                 payload=payload + "}"
             self.callbackWindow.updateDumpTxt(payload)
-        
+        if(msg.topic.endswith("isAutoDimmed")):
+            self.callbackWindow.updateAutoDimmed(payload)
+            pass
+
     def publish(self, topic, message):
         result = self.client.publish(topic, message)
         return result
@@ -194,6 +197,7 @@ class Main:
         self.root=root
         self.mqtt_client = MQTTClient(broker, port, self)
         self.mqtt_client.connect()
+        #query settings
         msg=1
         result = self.mqtt_client.publish(topic_pub, "1") #request settings
         # result: [0, 1]
@@ -202,6 +206,8 @@ class Main:
                 print(f"Send `{msg}` to topic `{topic_pub}`")
         else:
                 print(f"Failed to send message to topic {topic_pub}")
+
+                result = self.mqtt_client.publish(topic_pub, "1") #request settings
 
         self.root = root
         root.title("Main")
@@ -332,6 +338,12 @@ class Main:
         self.button1Close = tk.Button(root, text="Close", command=self.onButtonClose_Click)
         self.button1Close.place(x=482, y=386, width=96, height=32)
 
+        # AutoDim status
+        self.autodim_status=tk.StringVar() #using StringVar binde changes to UI without code
+        self.autodim_status.set("autodim status")
+        self.textAutonDimOnOff = tk.Label(root, textvariable=self.autodim_status)
+        self.textAutonDimOnOff.place(x=400, y=340, width=170, height=20)
+
         pass
 
     def onButtonClose_Click(self):
@@ -364,6 +376,10 @@ class Main:
     def setText(self, txtObj, txt):
         txtObj.delete(1.0, "end")
         txtObj.insert(1.0, txt)
+
+    def updateAutoDimmed(self, txt):
+        self.autodim_status.set("AutoDim: " + txt)
+        pass
 
     def updateDumpTxt(self, txt):
         if(not txt.endswith("}")):
@@ -413,6 +429,15 @@ class Main:
             mySettingsDict[key]=data
             cnt=cnt+1
         print("updated mySettingsDict: " + str(cnt))
+
+        # query auto dim status
+        result = self.mqtt_client.publish("/esp32_clock/getAutoDimmed", "1") #request autodimmed
+        status = result[0]
+        if status == 0:
+                print(f"Send `getAutoDim` to topic `/esp32_clock/getAutoDimmed`")
+        else:
+                print(f"Failed to send message to topic /esp32_clock/getAutoDimmed")
+
         pass
 
     def update(self, n):
@@ -428,7 +453,10 @@ class Main:
         pass
 
     def getText(self, txtbox):
-        return txtbox.get("1.0", "end")
+        txt=txtbox.get("1.0", "end")
+        if (txt.endswith("\n")):
+            txt=txt[:-1]
+        return txt
     
     # use right publish topics not yet in dict!
     # see getTopicForKey(what)
@@ -440,7 +468,8 @@ class Main:
             elif(key=="colorHour"):
                 mySettingsDict[key]=self.getText(self.textHandleHourColor)
             elif(key=="colorMinute"):
-                mySettingsDict[key]=self.getText(self.textHandleHourColor)
+                value=self.getText(self.textHandleHourColor)
+                mySettingsDict[key]=value
             elif(key=="brightness"):
                 mySettingsDict[key]=self.getText(self.textBrightness)
             elif (key=="tickColor"):
