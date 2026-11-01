@@ -31,6 +31,10 @@ Settings can be changed using mqtt (/esp32_clock/...), yes it starts with a slas
 
 psDashboard.py is a Python3 tkinter example showing how to control the settings remotely.
 
+![psDashboard Main](https://github.com/hjgode/esp32_60_neopixel_ring_clock/psDashboard_main.png)
+
+![psDashboard Color Selection](https://github.com/hjgode/esp32_60_neopixel_ring_clock/psDashboard_color.png)
+
 Settings are saved and reloaded between reboots.
 
 The hour moves smoothly between the full hours, easier to read when you see it is after or before 11:00 AM.
