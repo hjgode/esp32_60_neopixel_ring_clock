@@ -440,13 +440,14 @@ bool checkAutoDim(int h){
 
 void showTime(int h, int m, int s) {
   pixels.clear();
-  setMinutes(m);
   setTicks(m);
+
+  setSeconds(s);
+  setMinutes(m);
   int hourPos = getHourMin(h, m); // use the minutes with hour to calculate a pos on the circle, ie 11:30 gives 57.5 instead of simply 55
   //setHours(h);
   setHours(hourPos);
-  setSeconds(s);
-  pixels.show();
+  
   if(lastCurrentHour!=h){
     if(checkAutoDim(h)){
       //Serial.println("AutoDim on");
@@ -457,6 +458,7 @@ void showTime(int h, int m, int s) {
     }
     lastCurrentHour=h;
   }
+  pixels.show();
   //printTime(h, m, s);
 }
 
