@@ -55,3 +55,8 @@ Settings are saved and reloaded between reboots.
 
 The hour moves smoothly between the full hours, easier to read when you see it is after or before 11:00 AM. So, if it is 06:30, the hour pixel set is not at 6 but between 6 and 7.
 
+The clock showing 09:25:45
+
+![psDashboard Main](https://github.com/hjgode/esp32_60_neopixel_ring_clock/blob/9d646ae0bf7fe0a3f8feaba2e00650157cc20d4e/pixel_clock_09-25-45)
+
+You see the hour tick is not on 09 but more to 10.
