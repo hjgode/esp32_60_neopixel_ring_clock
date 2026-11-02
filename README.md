@@ -59,4 +59,6 @@ The clock showing 09:25:45
 
 ![Pixel clock photo](https://github.com/hjgode/esp32_60_neopixel_ring_clock/blob/5ef2be4af3a323e3352b8f6ffa679801d1c3fcdf/pixel_clock_09-25-45.jpg)
 
-You see the hour tick is not on 09 but more to 10.
+You see the hour tick (red) is not on 09 but more to 10. The minute tick is the green one.
+
+The hour tick is not only showing one LED but the neighbor LEDs too with 50% brightness.

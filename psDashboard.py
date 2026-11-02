@@ -7,9 +7,9 @@ import json
 
 broker = '192.168.0.40' #'iot.reyax.com'
 port = 1883
-topic_watch ="/esp32_clock/#"
-topic_pub = "/esp32_clock/dumpValues"
-topic_sub = "/esp32_clock/settings"
+topic_watch ="esp32_clock/#"
+topic_pub = "esp32_clock/dumpValues"
+topic_sub = "esp32_clock/settings"
 # generate client ID with pub prefix randomly
 client_id = 'esp32_dashboard'
 username = ''
@@ -431,12 +431,12 @@ class Main:
         print("updated mySettingsDict: " + str(cnt))
 
         # query auto dim status
-        result = self.mqtt_client.publish("/esp32_clock/getAutoDimmed", "1") #request autodimmed
+        result = self.mqtt_client.publish("esp32_clock/getAutoDimmed", "1") #request autodimmed
         status = result[0]
         if status == 0:
-                print(f"Send `getAutoDim` to topic `/esp32_clock/getAutoDimmed`")
+                print(f"Send `getAutoDim` to topic `esp32_clock/getAutoDimmed`")
         else:
-                print(f"Failed to send message to topic /esp32_clock/getAutoDimmed")
+                print(f"Failed to send message to topic esp32_clock/getAutoDimmed")
 
         pass
 
@@ -547,15 +547,16 @@ class Main:
         if(tkColorStr != None):
             iRGB=self.getIntFromTuple(tkColorTuple=tkColorTuple)
             self.setText(self.textHandleSecondColor, str(iRGB))
+            print("getColorSecond: handleSecondColor iRGB=" + str(iRGB))
         #self.settings = FormColor(self.update, self, self.textHandleSecondColor.get("1.0","end"), self.textHandleSecondColor, self.root)
         pass
 
     def sendSavePrefs(self):
-        self.mqtt_client.publish("/esp32_clock/save_Pref", "1")
+        self.mqtt_client.publish("esp32_clock/save_Pref", "1")
         pass
     def sendLoadPrefs(self):
-        self.mqtt_client.publish("/esp32_clock/load_Pref", "1")
-        self.mqtt_client.publish("/esp32_clock/dumpValues", "1")
+        self.mqtt_client.publish("esp32_clock/load_Pref", "1")
+        self.mqtt_client.publish("esp32_clock/dumpValues", "1")
         pass
 
     def rgb_to_hex(self, r, g, b):
@@ -613,149 +614,6 @@ class Main:
         (rgbTuple, tkColor)=c_code
         return (rgbTuple, tkColor)
         pass
-'''    
-class FormColor:
-    def __init__(self, func, callerWin, sRGB, callerText, master):
-        self.win=tk.Toplevel(master)
-        self.win.resizable(False, False)
-        
-        self.func=func 
-        self.caller=callerWin
-        self.callerText=callerText
-        
-        self.rgbStr=sRGB
-
-        self.win.title("Settings")
-        self.win.geometry("520x380")
-        root=self.win
-
-        self.var = tk.IntVar()
-        self.OkCancel=False
-        self.colourR=0.0
-        self.colourG=0.0
-        self.colourB=0.0
-        self.colorRGB="" # (self.colourR << 8) + (self.colourG << 16) + self.colourB
-
-        self.Color_R = tk.Scale(root, from_=0, to=255, orient="horizontal", command=self.on_change_R)
-        self.Color_R.place(x=20, y=20, width=180, height=48)
-
-        self.color_G = tk.Scale(root, from_=0, to=255, orient="horizontal", command=self.on_change_G)
-        self.color_G.place(x=20, y=90, width=180, height=48)
-
-        self.color_B = tk.Scale(root, from_=0, to=255, orient="horizontal", command=self.on_change_B)
-        self.color_B.place(x=20, y=160, width=180, height=48)
-
-        self.buttonOK = tk.Button(root, text="OK", command=self.on_buttonOK)
-        self.buttonOK.place(x=310, y=250, width=96, height=32)
-
-        self.buttonCancel = tk.Button(root, text="Cancel", command=self.on_buttonCancel)
-        self.buttonCancel.place(x=190, y=250, width=96, height=32)
-
-        self.textColor = tk.Text(root, bg="#f6d32d")
-        self.textColor.place(x=286, y=20, width=120, height=100)
-
-        self.label=tk.Label(root, text="Setting Window")
-        self.label.place(x=20, y=286, width=120, height=100)
-
-        #set scales to R G B
-        self.setScale(self.Color_R, int(sRGB) & 0xff0000)
-        self.setScale(self.color_G, int(sRGB) & 0x00ff00)
-        self.setScale(self.color_B, int(sRGB) & 0x0000ff)
-
-        #set bg of textColor
-        self.setText(self.textColor, self.int2RGBstr(int(sRGB)))
-        self.textColor.config(bg=self.int2RGBstr(int(sRGB)))
-
-        #TEST
-        i=self.getRGBint()
-
-        pass
-
-    def setText(self, txtObj, txt):
-        txtObj.delete(1.0, "end")
-        txtObj.insert(1.0, txt)
-        pass
-
-    def setScale(self, scaleObj, val):
-        scaleObj.set(val)
-        pass
-
-    def ParentFunc(self):
-        self.func(self.var.get())
-
-    def on_buttonCancel(self):
-        self.win.destroy()
-        pass
-
-    def rgb_to_hex(self, r, g, b):
-        s='#' + ''.join('{:02X}'.format(value) for value in (r, g, b))
-        s=s[0:7]
-        return s
-
-    def int2RGB(self, i):
-        r=i & 0x00ff0000
-        g=i & 0x0000ff00
-        b=i & 0x000000ff
-
-        return self.rgb_to_hex(r,g,b)
-        pass
-
-    def int2RGBstr(self,i):
-        r=i & 0x00ff0000
-        g=i & 0x0000ff00
-        b=i & 0x000000ff
-        return self.rgb_to_hex(r,b,g)    
-        pass
-
-    def getRGB(self):
-        R=self.Color_R.get()
-        G=self.color_G.get()
-        B=self.color_B.get()
-
-        self.rgbStr=self.rgb_to_hex(R, G, B)
-        self.colorRGB=self.rgbStr
-        return self.rgbStr
-        
-    def getRGBint(self):
-        R=self.Color_R.get()
-        G=self.color_G.get()
-        B=self.color_B.get()
-        i = R * 0xff00 + G * 0x00ff + B 
-        return i
-        pass
-
-    def on_buttonOK(self):
-        self.caller.setText(self.callerText, self.getRGBint())
-        self.win.destroy()
-        pass
-
-    def returnColor(self):
-        return self.getRGBint()
-        pass
-
-    def on_change_R(self, value):
-        self.colourR=value
-#        self.caller.colorR=value
-#        print(f"color in main: {self.caller.colorR}")
-        self.updateColorShow()
-        pass
-
-    def on_change_G(self, value):
-        self.colourG=value
-        self.updateColorShow()
-        pass
-
-    def on_change_B(self, value):
-        self.colourB=value
-        self.updateColorShow()
-        pass
-
-    def updateColorShow(self):
-        newColor=self.getRGB()
-        self.textColor.config(bg=newColor);
-        self.setText(self.textColor, newColor)
-        pass
-'''
 
 class Helligkeit:
     def __init__(self, callerWin, helligkeit, callerText, master):
@@ -900,7 +758,7 @@ class UpdateForm:
             if(payload.endswith("\n")):
                 payload=payload.strip("\n")
             payload=payload.strip()
-            self.mqtt.publish("/esp32_clock/" + topic, payload)
+            self.mqtt.publish("esp32_clock/" + topic, payload)
             print("updating " + topic + " to " +str(mySettingsDict.get(k)))
             
         pass

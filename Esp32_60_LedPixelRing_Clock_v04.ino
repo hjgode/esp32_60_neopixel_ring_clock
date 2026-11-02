@@ -193,8 +193,8 @@ void connect() {
 
   Serial.println("\nconnected!");
 
-  //client.subscribe("/esp32_clock/brightness");
-  client.subscribe("/esp32_clock/#");
+  //client.subscribe("esp32_clock/brightness");
+  client.subscribe("esp32_clock/#");
   // client.unsubscribe("/hello");
 }
 
@@ -314,7 +314,7 @@ void printTime(int h, int m, int s) {
 
 //give pixel number for givven pixel count and offset
 int index(int i) {
-  return (i + OFFSET) % NPIXELS; 
+  return (i + OFFSET) % NPIXELS; //ie 15 Seconds => (15 + 0) % 60
 }
 
 //set pixel on LED band regarding offset and num LEDs
@@ -462,9 +462,11 @@ void showTime(int h, int m, int s) {
   //printTime(h, m, s);
 }
 
+/// update display, only runs is a second has elapsed
 void updateDisplay() {
 // Only update the screen once every second and at the start
   if (millis() - ms >= 1000) {
+    ms = millis(); //reset
     hh = tm.tm_hour;
     // 12 hours clock
     if (hh > 11) 
@@ -507,7 +509,7 @@ void dumpValues(){
   char mybuf[payload.length()+1];
   payload.toCharArray(mybuf, sizeof(mybuf));
 
-  client.publish("/esp32_clock/settings", mybuf, sizeof(mybuf));
+  client.publish("esp32_clock/settings", mybuf, sizeof(mybuf));
   dumpFlag=false;
 }
 
@@ -520,7 +522,7 @@ void publishAutoDimmed(){
     payload="off";
   char mybuf[payload.length()]; //initialized with \0, no need to add +1
   payload.toCharArray(mybuf, sizeof(mybuf));
-  client.publish("/esp32_clock/isAutoDimmed", (char*) payload.c_str(), sizeof(mybuf));
+  client.publish("esp32_clock/isAutoDimmed", (char*) payload.c_str(), sizeof(mybuf));
   flagIsAutoDimmed=false;
 }
 
@@ -643,6 +645,7 @@ void loop() {
     publishAutoDimmed();
 
   }
+
 /*  if (millis() - lastMillis >= 2*60*1000UL) 
   {
     lastMillis = millis();  //get ready for the next iteration
