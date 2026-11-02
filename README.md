@@ -57,6 +57,6 @@ The hour moves smoothly between the full hours, easier to read when you see it i
 
 The clock showing 09:25:45
 
-![psDashboard Main](https://github.com/hjgode/esp32_60_neopixel_ring_clock/blob/9d646ae0bf7fe0a3f8feaba2e00650157cc20d4e/pixel_clock_09-25-45)
+![Pixel clock photo](https://github.com/hjgode/esp32_60_neopixel_ring_clock/blob/5ef2be4af3a323e3352b8f6ffa679801d1c3fcdf/pixel_clock_09-25-45.jpg)
 
 You see the hour tick is not on 09 but more to 10.
