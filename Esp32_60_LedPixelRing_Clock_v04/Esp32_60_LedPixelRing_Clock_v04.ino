@@ -98,7 +98,12 @@ const char* WIFI_PASSWORD = "1234567890123";
 
 #include <Preferences.h>
 #include <time.h>
-#include <WiFi.h>
+
+//declarations
+void pref_Save();
+void pref_Load();
+
+#include <WiFi.h> //see WebGUI
 #include <MQTT.h>
 
 WiFiClient net;
@@ -121,6 +126,8 @@ int hourDirectCalc = 0;                           //0-23 global hour data gets u
 // ----------------------------------------------------------------
 // LED
 #include "Adafruit_NeoPixel.h"
+#include <WebGUI.h>
+
 
 //# define PIXEL_BRIGHTNESS 127 //10
 uint8_t PIXEL_BRIGHTNESS=20;
@@ -150,6 +157,229 @@ Preferences preferences;
 int cnt=0;  //used inside updateDisplay 
 
 unsigned long lastMillis; //used inside loop()
+
+//##### webgui stuff #########################################################
+void setSlider(Slider &slider, int pos){
+  slider.setValue(pos);
+}
+int getSlider(Slider &slider){
+  return slider.getIntValue();
+}
+
+int TOGGLE_AUTODIM = 0;
+// Network configuration - UPDATE THESE WITH YOUR WIFI CREDENTIALS
+//const char* WIFI_SSID = "Horst1";        // Your WiFi network name
+//const char* WIFI_PASSWORD = "1234567890123"; // Your WiFi password
+
+// Web interface configuration
+const char* PAGE_TITLE = "ESP32 Clock Control Panel";  // Browser tab title and page heading
+
+  Slider sliderBrightness("Brightness", 20, 50, 0, 255, PIXEL_BRIGHTNESS, 200);
+
+  Slider sliderHourHandleR("Hour Red", 20, 50, 0, 255, 30, 200);
+  Slider sliderHourHandleG("Hour Green", 20 + 20 +200, 50, 0, 255, 30, 200);
+  Slider sliderHourHandleB("Hour Blue", 20+20+200+200, 50, 0, 255, 30, 200);
+
+  Slider sliderMinuteHandleR("Minute Red", 20, 50, 0, 255, 30, 200);
+  Slider sliderMinuteHandleG("Minute Green", 20 + 20 +200, 50, 0, 255, 30, 200);
+  Slider sliderMinuteHandleB("Minute Blue", 20+20+200+200, 50, 0, 255, 30, 200);
+
+  Slider sliderSecondHandleR("Second Red", 20, 50, 0, 255, 30, 200);
+  Slider sliderSecondHandleG("Second Green", 20 + 20 +200, 50, 0, 255, 30, 200);
+  Slider sliderSecondHandleB("Second Blue", 20+20+200+200, 50, 0, 255, 30, 200);
+
+  Slider sliderTickColorR("Ticks Red", 20, 50, 0, 255, 30, 200);
+  Slider sliderTickColorG("Ticks Green", 20 + 20 +200, 50, 0, 255, 30, 200);
+  Slider sliderTickColorB("Ticks Blue", 20+20+200+200, 50, 0, 255, 30, 200);
+
+  Slider sliderAutoDimStart("AutoDim Start", 20 + 20 +200, 50, 0, 23, hourStartDim, 200);
+  Slider sliderAutoDimStop("AutoDim Stop", 20+20+200+200, 50, 0, 23, hourStopDim, 200);
+
+  // Control elements - these create the web interface buttons and sliders
+  Toggle toggleAutoDim("AutoDim Toggle", 20, 50, 200);     // Toggle: label, x, y, width
+
+  // Slider constructor: Slider(label, x, y, min, max, default, width)
+  Slider sliderAutoDim("AutoDim value", 20, 80, 0, 255, 90);       // Servo 1 position control
+
+  // Button contructor
+  Button saveButton("Save Settings", 20, 190, 150, 40);
+  Button loadButton("Load Settings", 20, 190, 150, 40);
+
+  // Variables to track system state
+  int currentAutoDimValue = 30;     // Current brightness value (0-255)
+  // Global variables to track servo states
+  int sliderAutoDimValuePos = 10;     // Current position of slider
+
+
+void startWebGUI(){
+  
+    Serial.println("Connecting to WiFi...");
+  if (GUI.connectWiFi(WIFI_SSID, WIFI_PASSWORD)) {
+    Serial.println("Connected to WiFi network: " + String(WIFI_SSID));
+    Serial.println("Web interface: http://" + GUI.getIP());
+  } else {
+    Serial.println("WiFi connection failed - starting backup Access Point");
+    GUI.startAP("Basic-Controller", "password123");
+    Serial.println("Connect to WiFi: Basic-Controller");
+    Serial.println("Web interface: http://192.168.4.1");
+  }
+  
+  // Configure the web interface appearance
+  GUI.setTitle(PAGE_TITLE);              // Browser tab title and page heading
+  
+  // Add all control elements to the web interface
+  // The order you add them determines their order on the page
+  GUI.addElement(&sliderBrightness);
+  
+  uint8_t R,G,B;
+  //new_RGB = (blue << 16) | (green << 8) | red;
+  R=(handleHourColor >> 16) & 0xff;
+  G=(handleHourColor >> 8) & 0xff;
+  B=handleHourColor & 0xff;
+  GUI.addElement(&sliderHourHandleR);
+  GUI.addElement(&sliderHourHandleG);
+  GUI.addElement(&sliderHourHandleB);
+  sliderHourHandleR.setValue(R);
+  sliderHourHandleG.setValue(G);
+  sliderHourHandleB.setValue(B);
+
+  GUI.addElement(&sliderMinuteHandleR);
+  GUI.addElement(&sliderMinuteHandleG);
+  GUI.addElement(&sliderMinuteHandleB);
+  R=(handleMinuteColor >> 16) & 0xff;
+  G=(handleMinuteColor >> 8) & 0xff;
+  B=handleMinuteColor & 0xff;
+  setSlider(sliderMinuteHandleR, R);
+  setSlider(sliderMinuteHandleG, G);
+  setSlider(sliderMinuteHandleB, B);
+
+  GUI.addElement(&sliderSecondHandleR);
+  GUI.addElement(&sliderSecondHandleG);
+  GUI.addElement(&sliderSecondHandleB);
+  R=(handleSecondColor >> 16) & 0xff;
+  G=(handleSecondColor >> 8) & 0xff;
+  B=handleSecondColor & 0xff;
+  setSlider(sliderSecondHandleR, R);
+  setSlider(sliderSecondHandleG, G);
+  setSlider(sliderSecondHandleB, B);
+
+  GUI.addElement(&sliderTickColorR);
+  GUI.addElement(&sliderTickColorG);
+  GUI.addElement(&sliderTickColorB);
+  R=(tickColor >> 16) & 0xff;
+  G=(tickColor >> 8) & 0xff;
+  B=tickColor & 0xff;
+  setSlider(sliderTickColorR, R);
+  setSlider(sliderTickColorG, G);
+  setSlider(sliderTickColorB, B);
+
+  GUI.addElement(&toggleAutoDim);     // Add LED toggle switch
+  GUI.addElement(&sliderAutoDim);
+
+  GUI.addElement(&sliderAutoDimStart);
+  GUI.addElement(&sliderAutoDimStop);
+
+  toggleAutoDim.setState(dimOn);
+  sliderAutoDim.setValue(valueDim);
+
+  GUI.addElement(&saveButton);
+  GUI.addElement(&loadButton);
+
+  // Start the web server
+  GUI.begin();
+
+}
+
+/*
+in loop
+  GUI.update();
+  
+  // Check if the LED toggle switch was changed
+  if (ledToggle.wasToggled()) 
+  {
+    bool ledState = ledToggle.isOn();  // Get the current toggle state
+    Serial.println("Toggle LED: " + String(ledState ? "ON" : "OFF"));
+    
+    // Control the built-in LED with simple on/off
+    digitalWrite(TOGGLE_LED_PIN, ledState);
+  }
+*/
+
+uint32_t oldRGB=0;
+
+// call peridically in loop()
+void updateWebGUI(){
+  GUI.update();
+
+  //brightness
+  int bright=getSlider(sliderBrightness);
+  PIXEL_BRIGHTNESS=bright;
+
+  // Check if the LED toggle switch was changed
+  if (toggleAutoDim.wasToggled()) 
+  {
+    bool autoDimState = toggleAutoDim.isOn();  // Get the current toggle state
+    //TODO: apply changes
+    dimOn=autoDimState;
+  }
+  //TODO: apply changes...
+  valueDim=sliderAutoDim.getIntValue();
+
+  int R,G,B;
+  //hour handle
+  R=getSlider(sliderHourHandleR);
+  G=getSlider(sliderHourHandleG);
+  B=getSlider(sliderHourHandleB);
+  //get long int for this
+  uint32_t RGB = (R << 16) | (G << 8) | B;
+  handleHourColor=RGB;
+  if(oldRGB != RGB){
+    Serial.printf("hour handle color now: ");
+    Serial.println(RGB);
+    oldRGB=RGB;
+  }
+
+  //minute handle
+  R=getSlider(sliderMinuteHandleR);
+  G=getSlider(sliderMinuteHandleG);
+  B=getSlider(sliderMinuteHandleB);
+  //get long int for this
+  RGB = (R << 16) | (G << 8) | B;
+  handleMinuteColor=RGB;
+
+  //second handle
+  R=getSlider(sliderSecondHandleR);
+  G=getSlider(sliderSecondHandleG);
+  B=getSlider(sliderSecondHandleB);
+  //get long int for this
+  RGB = (R << 16) | (G << 8) | B;
+  handleSecondColor=RGB;
+  
+  //tick color
+  R=getSlider(sliderTickColorR);
+  G=getSlider(sliderTickColorG);
+  B=getSlider(sliderTickColorB);
+  //get long int for this
+  RGB = (R << 16) | (G << 8) | B;
+  tickColor=RGB;
+
+  //hour Start Dim
+  int startDim=getSlider(sliderAutoDimStart);
+  hourStartDim=startDim;
+  //hour Stop Dim
+  hourStopDim=getSlider(sliderAutoDimStop);
+
+  // Check if save button was pressed
+  if (saveButton.wasPressed()) {
+    //TODO: save settings
+    pref_Save();
+  }
+  if (loadButton.wasPressed()) {
+    //TODO: save settings
+    pref_Load();
+  }
+}
+//##### end webgui
 
 /// convert r,g,b,w values to rgbw 32bit
 uint32_t rgb_to_int(uint8_t r, uint8_t g, uint8_t b, uint8_t w) {
@@ -208,7 +438,9 @@ void setupNtpTime() {
 
 /// connect to WiFi
 void setupWiFi() {
+  startWebGUI();
   // start network
+/*
   WiFi.persistent(false);
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
@@ -218,6 +450,7 @@ void setupWiFi() {
   }
   Serial.println("\nWiFi connected");
   Serial.println(WiFi.localIP());
+*/
 }
 
 /// dump current time to serial
@@ -610,8 +843,8 @@ void setup() {
 
   setupNtpTime();
 
-  setupWiFi();
-  
+  setupWiFi();  // calls startWebGUI();
+
   // Note: Local domain names (e.g. "Computer.local" on OSX) are not supported
   // by Arduino. You need to set the IP address directly.
   client.begin("192.168.0.40", 1883, net);
@@ -625,6 +858,7 @@ void setup() {
   pixels.show();
   
   pref_Load();
+
 }
 
 void loop() {
@@ -636,6 +870,8 @@ void loop() {
   
   updateDisplay();
   delay(100);
+
+  updateWebGUI();
 
   if(dumpFlag){
     dumpValues();
