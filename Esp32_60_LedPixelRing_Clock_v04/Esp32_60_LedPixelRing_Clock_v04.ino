@@ -381,25 +381,44 @@ void updateWebGUI(){
 }
 //##### end webgui
 
-/// convert r,g,b,w values to rgbw 32bit
-uint32_t rgb_to_int(uint8_t r, uint8_t g, uint8_t b, uint8_t w) {
-    return r | (g << 8) | (b << 16) | (w << 24);
+
+// Rainbow cycle along whole strip. Pass delay time (in ms) between frames.
+// gives _rmtGetBus(): ==>_rmtWrite():GPIO 2 is not attached to an RMT channel. in this app!
+void rainbow(int wait) {
+  pixels.setBrightness(80);
+  // Hue of first pixel runs 5 complete loops through the color wheel.
+  // Color wheel has a range of 65536 but it's OK if we roll over, so
+  // just count from 0 to 5*65536. Adding 256 to firstPixelHue each time
+  // means we'll make 5*65536/256 = 1280 passes through this loop:
+  for(long firstPixelHue = 0; firstPixelHue < 5*65536; firstPixelHue += 256) {
+    // strip.rainbow() can take a single argument (first pixel hue) or
+    // optionally a few extras: number of rainbow repetitions (default 1),
+    // saturation and value (brightness) (both 0-255, similar to the
+    // ColorHSV() function, default 255), and a true/false flag for whether
+    // to apply gamma correction to provide 'truer' colors (default true).
+    pixels.rainbow(firstPixelHue);
+    // Above line is equivalent to:
+    // strip.rainbow(firstPixelHue, 1, 255, 255, true);
+    pixels.show(); // Update strip with new contents
+    delay(wait);  // Pause for a moment
+  }
 }
 
-/// convert rgbw 32bit to r,g,b,w values
-void rgb_from_int(uint32_t rgbw, uint8_t &r, uint8_t &g, uint8_t &b, uint8_t &w) {
-    b = (rgbw & 0x000000FF);
-    g = (rgbw & 0x0000FF00) >> 8;
-    r = (rgbw & 0x00FF0000) >> 16;
-    w = (rgbw & 0xFF000000) >> 24;
+/// convert r,g,b,w values to rgbw 32bit
+uint32_t rgb_to_int(uint8_t r, uint8_t g, uint8_t b, uint8_t w) {
+  //get long int for this
+  uint32_t RGB = (w << 24) | (r << 16) | (g << 8) | b;
+  return RGB;
+//    return r | (g << 8) | (b << 16) | (w << 24);
 }
 
 // return a dimmed (or brighter) wrgb value, dim gives percent of change
 uint32_t rgb_dim(uint32_t rgbw, uint8_t dim) {
-    uint8_t b = (rgbw & 0x000000FF);
-    uint8_t g = (rgbw & 0x0000FF00) >> 8;
-    uint8_t r = (rgbw & 0x00FF0000) >> 16;
-    uint8_t w = (rgbw & 0xFF000000) >> 24;
+    uint8_t r=(rgbw >> 16) & 0xff;
+    uint8_t g=(rgbw >> 8) & 0xff;
+    uint8_t b=rgbw & 0xff;
+    uint8_t w =(rgbw >> 24) & 0xff;
+
     b = b/100 * dim;
     g = g/100 * dim;
     r = r/100 * dim;
@@ -409,10 +428,12 @@ uint32_t rgb_dim(uint32_t rgbw, uint8_t dim) {
 
 ///mqtt client connect
 void connect() {
+//  rainbow(1); //gives _rmtGetBus(): ==>_rmtWrite():GPIO 2 is not attached to an RMT channel.
   Serial.print("checking wifi...");
   while (WiFi.status() != WL_CONNECTED) {
     Serial.print(".");
     delay(1000);
+    //rainbow(1);
   }
 
   Serial.print("\nconnecting...");
@@ -676,11 +697,11 @@ void showTime(int h, int m, int s) {
   pixels.clear();
   setTicks(m);
 
-  setSeconds(s);
   setMinutes(m);
   int hourPos = getHourMin(h, m); // use the minutes with hour to calculate a pos on the circle, ie 11:30 gives 57.5 instead of simply 55
   //setHours(h);
   setHours(hourPos);
+  setSeconds(s);
   
   if(lastCurrentHour!=h){
     if(checkAutoDim(h)){
