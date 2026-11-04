@@ -156,20 +156,21 @@ uint32_t rgb_to_int(uint8_t r, uint8_t g, uint8_t b, uint8_t w) {
     return r | (g << 8) | (b << 16) | (w << 24);
 }
 
-/// convert rgbw 32bit to r,g,b,w values
-void rgb_from_int(uint32_t rgbw, uint8_t &r, uint8_t &g, uint8_t &b, uint8_t &w) {
-    b = (rgbw & 0x000000FF);
-    g = (rgbw & 0x0000FF00) >> 8;
-    r = (rgbw & 0x00FF0000) >> 16;
-    w = (rgbw & 0xFF000000) >> 24;
+/// convert r,g,b,w values to rgbw 32bit
+uint32_t rgb_to_int(uint8_t r, uint8_t g, uint8_t b, uint8_t w) {
+  //get long int for this
+  uint32_t RGB = (w << 24) | (r << 16) | (g << 8) | b;
+  return RGB;
+//    return r | (g << 8) | (b << 16) | (w << 24);
 }
 
 // return a dimmed (or brighter) wrgb value, dim gives percent of change
 uint32_t rgb_dim(uint32_t rgbw, uint8_t dim) {
-    uint8_t b = (rgbw & 0x000000FF);
-    uint8_t g = (rgbw & 0x0000FF00) >> 8;
-    uint8_t r = (rgbw & 0x00FF0000) >> 16;
-    uint8_t w = (rgbw & 0xFF000000) >> 24;
+    uint8_t r=(rgbw >> 16) & 0xff;
+    uint8_t g=(rgbw >> 8) & 0xff;
+    uint8_t b=rgbw & 0xff;
+    uint8_t w =(rgbw >> 24) & 0xff;
+
     b = b/100 * dim;
     g = g/100 * dim;
     r = r/100 * dim;
