@@ -623,6 +623,7 @@ String WebGUI::generateHTML() {
     String elementsHTML = "";
     for (GUIElement* element : elements) {
         elementsHTML += element->generateHTML();
+        Serial.println("generateHTML: " + element->generateHTML());
     }
     html.replace("%ELEMENTS%", elementsHTML);
     
@@ -647,6 +648,7 @@ String WebGUI::generateJS() {
         var buttonStates = {};
         
         function updateValue(id, val) {
+            console.log("updateValue: "+ id + val);
             fetch('/set?' + id + '=' + val).catch(e => console.log('Error:', e));
         }
         
@@ -659,6 +661,7 @@ String WebGUI::generateJS() {
         }
         
         function textboxChange(id, value) {
+//            console.log("textboxChange: '" + value + "'");
             fetch('/set?' + id + '=' + encodeURIComponent(value));
         }
         
@@ -882,9 +885,9 @@ String SystemStatus::getValue() {
 
 void SystemStatus::setValue(String value) {
     if(value.length()==0){
-        value="<p>System Info:</p>";
-        value+="&#10;<p>Free RAM: " + String(getFreeRAM()) + "</p>";
-        value+="<p>Uptime: " + getUptime() + "</p>";
+        value="System Info: ";
+        value+="Free RAM: " + String(getFreeRAM()) ;
+        value+=", Uptime: " + getUptime();
          
     }
     displayValue = value;
