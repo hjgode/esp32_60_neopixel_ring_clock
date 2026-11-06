@@ -174,23 +174,26 @@ int TOGGLE_AUTODIM = 0;
 // Web interface configuration
 const char* PAGE_TITLE = "ESP32 Clock Control Panel";  // Browser tab title and page heading
 
+const String htmlRedColor="#ff0000";
+const String htmlGreenColor="#00ff00";
+const String htmlBlueColor="#0000ff";
   Slider sliderBrightness("Brightness", 20, 50, 0, 255, PIXEL_BRIGHTNESS, 200);
 
-  Slider sliderHourHandleR("Hour Red", 20, 50, 0, 255, 30, 200);
-  Slider sliderHourHandleG("Hour Green", 20 + 20 +200, 50, 0, 255, 30, 200);
-  Slider sliderHourHandleB("Hour Blue", 20+20+200+200, 50, 0, 255, 30, 200);
+  Slider sliderHourHandleR("Hour Red", 20, 50, 0, 255, 30, 200, "#ff0000");
+  Slider sliderHourHandleG("Hour Green", 20 + 20 +200, 50, 0, 255, 30, 200, "#00ff00");
+  Slider sliderHourHandleB("Hour Blue", 20+20+200+200, 50, 0, 255, 30, 200, "#0000ff");
+  
+  Slider sliderMinuteHandleR("Minute Red", 20, 50, 0, 255, 30, 200, "#ff0000");
+  Slider sliderMinuteHandleG("Minute Green", 20 + 20 +200, 50, 0, 255, 30, 200, "#00ff00");
+  Slider sliderMinuteHandleB("Minute Blue", 20+20+200+200, 50, 0, 255, 30, 200, "#0000ff");
 
-  Slider sliderMinuteHandleR("Minute Red", 20, 50, 0, 255, 30, 200);
-  Slider sliderMinuteHandleG("Minute Green", 20 + 20 +200, 50, 0, 255, 30, 200);
-  Slider sliderMinuteHandleB("Minute Blue", 20+20+200+200, 50, 0, 255, 30, 200);
+  Slider sliderSecondHandleR("Second Red", 20, 50, 0, 255, 30, 200, htmlRedColor);
+  Slider sliderSecondHandleG("Second Green", 20 + 20 +200, 50, 0, 255, 30, 200, htmlGreenColor);
+  Slider sliderSecondHandleB("Second Blue", 20+20+200+200, 50, 0, 255, 30, 200, htmlBlueColor);
 
-  Slider sliderSecondHandleR("Second Red", 20, 50, 0, 255, 30, 200);
-  Slider sliderSecondHandleG("Second Green", 20 + 20 +200, 50, 0, 255, 30, 200);
-  Slider sliderSecondHandleB("Second Blue", 20+20+200+200, 50, 0, 255, 30, 200);
-
-  Slider sliderTickColorR("Ticks Red", 20, 50, 0, 255, 30, 200);
-  Slider sliderTickColorG("Ticks Green", 20 + 20 +200, 50, 0, 255, 30, 200);
-  Slider sliderTickColorB("Ticks Blue", 20+20+200+200, 50, 0, 255, 30, 200);
+  Slider sliderTickColorR("Ticks Red", 20, 50, 0, 255, 30, 200, htmlRedColor);
+  Slider sliderTickColorG("Ticks Green", 20 + 20 +200, 50, 0, 255, 30, 200, htmlGreenColor);
+  Slider sliderTickColorB("Ticks Blue", 20+20+200+200, 50, 0, 255, 30, 200, htmlBlueColor);
 
   Slider sliderAutoDimStart("AutoDim Start", 20 + 20 +200, 50, 0, 23, hourStartDim, 200);
   Slider sliderAutoDimStop("AutoDim Stop", 20+20+200+200, 50, 0, 23, hourStopDim, 200);
@@ -210,6 +213,7 @@ const char* PAGE_TITLE = "ESP32 Clock Control Panel";  // Browser tab title and 
   // Global variables to track servo states
   int sliderAutoDimValuePos = 10;     // Current position of slider
 
+  SystemStatus systemStatus("SytemStatus", 20, 20, 350);
 
 void startWebGUI(){
   
@@ -285,6 +289,8 @@ void startWebGUI(){
   GUI.addElement(&saveButton);
   GUI.addElement(&loadButton);
 
+  GUI.addElement(&systemStatus);
+
   // Start the web server
   GUI.begin();
 
@@ -310,7 +316,7 @@ uint32_t oldRGB=0;
 // call peridically in loop()
 void updateWebGUI(){
   GUI.update();
-
+  
   //brightness
   int bright=getSlider(sliderBrightness);
   PIXEL_BRIGHTNESS=bright;
@@ -430,14 +436,20 @@ uint32_t rgb_dim(uint32_t rgbw, uint8_t dim) {
 void connect() {
 //  rainbow(1); //gives _rmtGetBus(): ==>_rmtWrite():GPIO 2 is not attached to an RMT channel.
   Serial.print("checking wifi...");
-  while (WiFi.status() != WL_CONNECTED) {
-    Serial.print(".");
+  int max_attempts=5;
+  int test=0;
+  while ((WiFi.status() != WL_CONNECTED) && test<max_attempts ) {
+    if (!GUI.connectWiFi(WIFI_SSID, WIFI_PASSWORD)){
+      Serial.print(".");
+      test++;
+    }
     delay(1000);
     //rainbow(1);
   }
 
   Serial.print("\nconnecting...");
-  while (!client.connect("esp32_clock", "", "")) {
+  //use different ID? if two clocks in net?
+  while (!client.connect("esp32_clock1", "", "")) {
     Serial.print(".");
     delay(1000);
   }
@@ -446,6 +458,7 @@ void connect() {
 
   //client.subscribe("esp32_clock/brightness");
   client.subscribe("esp32_clock/#");
+  Serial.println("subscribe done");
   // client.unsubscribe("/hello");
 }
 
@@ -912,4 +925,10 @@ void loop() {
     printCurrentTime();  
   }
 */
+  //refresh SystemInfo
+  if (millis() - lastMillis >= 5*1000UL) 
+  {
+    lastMillis = millis();  //get ready for the next iteration
+    systemStatus.setValue("");
+  }
 }

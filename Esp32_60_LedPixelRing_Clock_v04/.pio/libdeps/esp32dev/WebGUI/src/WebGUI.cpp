@@ -66,7 +66,7 @@ const char BUTTON_TEMPLATE[] PROGMEM = R"rawliteral(
 const char SLIDER_TEMPLATE[] PROGMEM = R"rawliteral(
         <div class="webgui-slider-container">
             <label for="%ID%">%LABEL% <span class="webgui-slider-value" id="%ID%_value">%VALUE%</span></label>
-            <input type="range" id="%ID%" class="webgui-slider" min="%MIN%" max="%MAX%" value="%VALUE%">
+            <input type="range" id="%ID%" class="webgui-slider" min="%MIN%" max="%MAX%" value="%VALUE%" style="accent-color:%COLOR%;">
         </div>
 )rawliteral";
 
@@ -94,6 +94,7 @@ const char TEXTBOX_TEMPLATE[] PROGMEM = R"rawliteral(
         </div>
 )rawliteral";
 
+//unable to use any html formattting within %VALUE% is it goes thru encodeURIComponent
 const char SYSTEM_STATUS_TEMPLATE[] PROGMEM = R"rawliteral(
         <div class="webgui-system-container">
             <label class="webgui-system-label">%LABEL%</label>
@@ -536,9 +537,11 @@ void WebGUI::handleSetRequest(String request) {
 }
 
 String WebGUI::generateGetResponse() {
+    Serial.println("WebGUI::generateGetResponse()");
     String response = "{";
     for (size_t i = 0; i < elements.size(); i++) {
         if (i > 0) response += ",";
+        //warning: do not use \n in getValue functions
         response += "\"" + elements[i]->getID() + "\":\"" + elements[i]->getValue() + "\"";
     }
     response += "}";
@@ -547,12 +550,15 @@ String WebGUI::generateGetResponse() {
 #endif
 
 void WebGUI::handleRoot() {
+    Serial.println("WebGUI::handleRoot");
 #if defined(ESP32)
     // Reset save status elements when page is refreshed
     // Look for elements with "Save Status" in the label
     for (GUIElement* element : elements) {
         Serial.println("Checking element: " + element->getLabel() + " = " + element->getValue());
+        
         if (element->getLabel().indexOf("Save Status") >= 0) {
+            Serial.println("Save Status found!");
             String currentValue = element->getValue();
             Serial.println("Found Save Status element with value: " + currentValue);
             if (currentValue.indexOf("saved") >= 0 || currentValue.indexOf("Saving") >= 0) {
@@ -588,6 +594,7 @@ void WebGUI::handleSet() {
 }
 
 void WebGUI::handleGet() {
+    //Serial.println("WebGUI::handleGet()");
 #if defined(ESP32)
     String response = "{";
     for (size_t i = 0; i < elements.size(); i++) {
@@ -601,6 +608,7 @@ void WebGUI::handleGet() {
 }
 
 String WebGUI::generateHTML() {
+    Serial.println("generateHTML()");
     String html = String(HTML_TEMPLATE);
     
     // Set title and heading
@@ -711,7 +719,7 @@ String WebGUI::generateJS() {
         }
         
         // Start auto-updating sensor displays every 100ms
-        setInterval(updateSensorDisplays, 100);
+        setInterval(updateSensorDisplays, 1000);
         updateSensorDisplays();
     )rawliteral";
     
@@ -724,6 +732,7 @@ String WebGUI::generateJS() {
 
 // MEMORY OPTIMIZED: Stream HTML directly instead of building large strings in memory
 void WebGUI::streamHTML(WiFiClient& client) {
+    Serial.println("WebGUI::streamHTML");
     // Reset save status elements when page is refreshed
     // Look for elements with "Save Status" in the label
     for (GUIElement* element : elements) {
@@ -836,12 +845,58 @@ String GUIElement::getValue() {
     return "";
 }
 
+// ==============================
+// SystemStatus implementation
+// ==============================
+SystemStatus::SystemStatus(String label, int x, int y, int width) 
+    : GUIElement(label, x, y, width, 40), displayValue("0") {
+}
+
+String SystemStatus::generateHTML() {
+    String html = String(SYSTEM_STATUS_TEMPLATE);
+    html.replace("%ID%", id);
+    html.replace("%LABEL%", label);
+    html.replace("%VALUE%", displayValue);
+    return html;
+}
+
+String SystemStatus::generateCSS() {
+    // Memory optimized: return empty string since we're using minimal CSS
+    return "";
+}
+
+String SystemStatus::generateJS() {
+    // SystemStatus is read-only, no JavaScript needed
+    return "";
+}
+
+void SystemStatus::handleUpdate(String value) {
+    // Allow updating the display value (useful for reset operations)
+    displayValue = value;
+}
+
+String SystemStatus::getValue() {
+    return displayValue;
+}
+
+
+void SystemStatus::setValue(String value) {
+    if(value.length()==0){
+        value="<p>System Info:</p>";
+        value+="&#10;<p>Free RAM: " + String(getFreeRAM()) + "</p>";
+        value+="<p>Uptime: " + getUptime() + "</p>";
+         
+    }
+    displayValue = value;
+}
+
 // =====================================================
 // Slider Implementation
 // =====================================================
 
-Slider::Slider(String label, int x, int y, int minValue, int maxValue, int defaultValue, int width) 
-    : GUIElement(label, x, y, width, 60), minValue(minValue), maxValue(maxValue), currentValue(defaultValue), valueChanged(false) {
+Slider::Slider(String label, int x, int y, int minValue, int maxValue, int defaultValue, int width, String trackColor) 
+    : GUIElement(label, x, y, width, 60), minValue(minValue), maxValue(maxValue), currentValue(defaultValue), valueChanged(false), trackColor(trackColor) {
+        
 }
 
 String Slider::generateHTML() {
@@ -851,6 +906,7 @@ String Slider::generateHTML() {
     html.replace("%MIN%", String(minValue));
     html.replace("%MAX%", String(maxValue));
     html.replace("%VALUE%", String(currentValue));
+    html.replace("%COLOR%", trackColor);
     return html;
 }
 
@@ -1557,7 +1613,9 @@ void WebGUI::clearMemory() {
 
 // Cross-platform function to get available RAM
 int getFreeRAM() {
-#ifdef ARDUINO_UNOR4_WIFI
+#ifdef ESP32
+    return esp_get_free_heap_size();
+#elif ARDUINO_UNOR4_WIFI
     // For Arduino UNO R4 WiFi (Renesas RA platform)
     // Simple stack-based approximation
     char dummy;
@@ -1573,4 +1631,8 @@ int getFreeRAM() {
 // Cross-platform function to clear all stored memory/settings
 void clearMemory() {
     GUI.clearMemory();
+}
+
+String getUptime(){
+    return uptime_formatter::getUptime();
 }
